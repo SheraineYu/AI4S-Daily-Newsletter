@@ -73,7 +73,7 @@ npm run digest:email
 
 新增脚本：`scripts/send-email.mjs`，基于 Gmail SMTP（Node 原生实现）发送邮件，不依赖 Codex 插件。
 
-- 先调用 `scripts/generate-email.mjs` 生成 JSON（subject/plainText/html）
+- 直接复用 digest 生成逻辑，构建 subject/plainText/html
 - 发送 HTML 正文，并附带纯文本 fallback
 - 缺失必需环境变量时会明确报错退出
 

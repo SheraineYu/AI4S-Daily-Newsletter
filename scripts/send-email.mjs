@@ -1,49 +1,33 @@
-import { spawn } from "node:child_process";
 import net from "node:net";
 import tls from "node:tls";
+import {
+  buildDigest,
+  renderHtmlDigest,
+  renderPlaintextDigest
+} from "../src/lib/digest.js";
 
 const DRY_RUN = process.argv.includes("--dry-run") || process.env.DIGEST_DRY_RUN === "1";
 
 function readEnv(name, { required = false, fallback } = {}) {
-  const value = process.env[name] ?? fallback;
-  if (required && (!value || !String(value).trim())) {
+  const raw = process.env[name];
+  const value = typeof raw === "string" ? raw.trim() : raw;
+  const finalValue = value ? value : fallback;
+
+  if (required && (!finalValue || !String(finalValue).trim())) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value;
+
+  return finalValue;
 }
 
-function runDigestGenerator() {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/generate-email.mjs"], {
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Digest generation failed with code ${code}: ${stderr || stdout}`));
-        return;
-      }
-
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (error) {
-        reject(new Error(`Failed to parse digest JSON output: ${error.message}`));
-      }
-    });
-  });
+async function buildDigestPayload() {
+  const digest = await buildDigest({ force: true });
+  return {
+    generatedAt: digest.generatedAt,
+    subject: `AI4S Daily Digest - ${digest.generatedAt.slice(0, 10)}`,
+    plainText: renderPlaintextDigest(digest),
+    html: renderHtmlDigest(digest)
+  };
 }
 
 function buildMessage({ from, to, subject, text, html }) {
@@ -75,7 +59,7 @@ function buildMessage({ from, to, subject, text, html }) {
 function createSmtpClient({ host, port, secure }) {
   return new Promise((resolve, reject) => {
     const onConnect = () => resolve(socket);
-    const onError = (err) => reject(err);
+    const onError = (error) => reject(error);
     const socket = secure
       ? tls.connect({ host, port, servername: host }, onConnect)
       : net.connect({ host, port }, onConnect);
@@ -100,9 +84,9 @@ async function readResponse(socket) {
       }
     };
 
-    const onError = (err) => {
+    const onError = (error) => {
       socket.off("data", onData);
-      reject(err);
+      reject(error);
     };
 
     socket.on("data", onData);
@@ -114,11 +98,14 @@ async function sendCommand(socket, command, expectedCodes) {
   if (command) {
     socket.write(`${command}\r\n`);
   }
+
   const lines = await readResponse(socket);
   const code = Number(lines[lines.length - 1].slice(0, 3));
+
   if (!expectedCodes.includes(code)) {
     throw new Error(`SMTP command failed (${command || "<initial>"}): ${lines.join(" | ")}`);
   }
+
   return lines;
 }
 
@@ -154,7 +141,7 @@ if (!Number.isInteger(smtpPort) || smtpPort <= 0) {
   throw new Error(`Invalid GMAIL_SMTP_PORT: ${smtpPortRaw}`);
 }
 
-const digestPayload = await runDigestGenerator();
+const digestPayload = await buildDigestPayload();
 if (!digestPayload?.subject || !digestPayload?.plainText || !digestPayload?.html) {
   throw new Error("Digest payload is missing one of required fields: subject, plainText, html");
 }
