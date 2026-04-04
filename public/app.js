@@ -18,7 +18,7 @@ function showToast(message) {
   window.clearTimeout(showToast.timeoutId);
   showToast.timeoutId = window.setTimeout(() => {
     toastEl.textContent = "";
-  }, 3600);
+  }, 3200);
 }
 
 function formatDate(value) {
@@ -48,11 +48,21 @@ function createItem(item) {
   const excerpt = fragment.querySelector(".digest-item__excerpt");
 
   anchor.href = item.link;
-  meta.textContent = `${item.source} · ${formatDate(item.publishedAt)}`;
+  meta.textContent = `${item.source} | ${formatDate(item.publishedAt)}`;
   title.textContent = item.title;
   excerpt.textContent = item.excerpt || "Open the original link for more detail.";
 
   return fragment;
+}
+
+function renderIdeas(listEl, ideas) {
+  listEl.innerHTML = "";
+
+  ideas.forEach((idea) => {
+    const li = document.createElement("li");
+    li.textContent = idea;
+    listEl.appendChild(li);
+  });
 }
 
 function renderFailures(failures) {
@@ -85,13 +95,21 @@ function renderTopics(topics) {
     const paperCount = fragment.querySelector(".topic-paper-count");
     const newsList = fragment.querySelector(".topic-news-list");
     const paperList = fragment.querySelector(".topic-paper-list");
+    const paperSection = fragment.querySelector(".topic-paper-section");
+    const topicColumns = fragment.querySelector(".topic-columns");
+    const briefingSummary = fragment.querySelector(".briefing-summary-text");
+    const briefingWarning = fragment.querySelector(".briefing-warning-text");
+    const briefingIdeas = fragment.querySelector(".briefing-ideas-list");
 
     card.style.setProperty("--card-accent", topic.accent);
     badge.textContent = topic.badge;
     title.textContent = topic.title;
     description.textContent = topic.description;
     newsCount.textContent = `${topic.news.length} news`;
-    paperCount.textContent = `${topic.papers.length} papers`;
+    paperCount.textContent = topic.showPapers === false ? "news only" : `${topic.papers.length} papers`;
+    briefingSummary.textContent = topic.analysis.summary;
+    briefingWarning.textContent = topic.analysis.warning;
+    renderIdeas(briefingIdeas, topic.analysis.ideas || []);
 
     if (topic.news.length) {
       topic.news.forEach((item) => newsList.appendChild(createItem(item)));
@@ -99,7 +117,10 @@ function renderTopics(topics) {
       newsList.appendChild(createEmptyState("No matched news items for this topic right now."));
     }
 
-    if (topic.papers.length) {
+    if (topic.showPapers === false) {
+      paperSection.remove();
+      topicColumns.classList.add("topic-columns--single");
+    } else if (topic.papers.length) {
       topic.papers.forEach((item) => paperList.appendChild(createItem(item)));
     } else {
       paperList.appendChild(createEmptyState("No papers returned for this topic right now."));
@@ -119,7 +140,7 @@ function renderOverview(overview, generatedAt) {
 
 async function fetchDigest(forceRefresh = false) {
   refreshButton.disabled = true;
-  refreshButton.textContent = forceRefresh ? "刷新中..." : "载入中...";
+  refreshButton.textContent = forceRefresh ? "Refreshing..." : "Loading...";
 
   try {
     const response = await fetch(`/api/digest${forceRefresh ? "?refresh=1" : ""}`);
@@ -136,7 +157,7 @@ async function fetchDigest(forceRefresh = false) {
     showToast(error.message);
   } finally {
     refreshButton.disabled = false;
-    refreshButton.textContent = "刷新最新情报";
+    refreshButton.textContent = "Refresh digest";
   }
 }
 
