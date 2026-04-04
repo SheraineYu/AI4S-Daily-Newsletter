@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI4S Daily Intelligence Deck</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Daily research monitoring</p>
+          <h1>AI4S / Frontier Models / Agents / Atomistic Research Digest</h1>
+          <p class="hero-text">
+            一个面向 AI4S、LAMs/PFD/DFT/LAMMPS/ABACUS、Agent、硬件加速与磁性材料的每日情报页。
+            后端会聚合全球新闻流与 arXiv 最新论文流，并生成可直接用于邮件发送的摘要内容。
+          </p>
+          <div class="hero-actions">
+            <button id="refreshButton" class="button primary">刷新最新情报</button>
+            <button id="copyMailButton" class="button secondary">复制邮件纯文本</button>
+            <button id="copyHtmlButton" class="button ghost">复制邮件 HTML</button>
+          </div>
+        </div>
+        <aside class="status-panel">
+          <div class="status-row">
+            <span>更新时间</span>
+            <strong id="generatedAt">载入中...</strong>
+          </div>
+          <div class="status-grid">
+            <div>
+              <span>Topics</span>
+              <strong id="topicCount">0</strong>
+            </div>
+            <div>
+              <span>News</span>
+              <strong id="newsCount">0</strong>
+            </div>
+            <div>
+              <span>Papers</span>
+              <strong id="paperCount">0</strong>
+            </div>
+            <div>
+              <span>Feeds</span>
+              <strong id="sourceCount">0</strong>
+            </div>
+          </div>
+          <p class="status-note">
+            如果某些源超时，页面会保留可用结果，并在下方列出失败源。
+          </p>
+        </aside>
+      </header>
+
+      <main>
+        <section class="section-head">
+          <div>
+            <p class="eyebrow">Monitored scope</p>
+            <h2>Today’s intelligence map</h2>
+          </div>
+          <div id="toast" class="toast" aria-live="polite"></div>
+        </section>
+
+        <section id="topicGrid" class="topic-grid"></section>
+
+        <section id="failuresSection" class="failures hidden">
+          <div class="section-head compact">
+            <div>
+              <p class="eyebrow">Attention</p>
+              <h2>Unavailable sources</h2>
+            </div>
+          </div>
+          <ul id="failuresList" class="failure-list"></ul>
+        </section>
+      </main>
+    </div>
+
+    <template id="topicTemplate">
+      <article class="topic-card">
+        <div class="topic-card__header">
+          <div>
+            <span class="topic-badge"></span>
+            <h3></h3>
+          </div>
+          <div class="topic-stats">
+            <span class="topic-news-count"></span>
+            <span class="topic-paper-count"></span>
+          </div>
+        </div>
+        <p class="topic-description"></p>
+        <div class="topic-columns">
+          <section>
+            <div class="subhead">
+              <h4>News</h4>
+              <span class="subnote">latest updates</span>
+            </div>
+            <div class="topic-news-list item-list"></div>
+          </section>
+          <section>
+            <div class="subhead">
+              <h4>Papers</h4>
+              <span class="subnote">latest research</span>
+            </div>
+            <div class="topic-paper-list item-list"></div>
+          </section>
+        </div>
+      </article>
+    </template>
+
+    <template id="itemTemplate">
+      <a class="digest-item" target="_blank" rel="noreferrer noopener">
+        <span class="digest-item__meta"></span>
+        <strong class="digest-item__title"></strong>
+        <p class="digest-item__excerpt"></p>
+      </a>
+    </template>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

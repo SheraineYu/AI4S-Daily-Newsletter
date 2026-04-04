@@ -1,0 +1,19 @@
+{
+  "name": "ai4s-newsletter",
+  "version": "1.0.0",
+  "description": "Daily digest dashboard for AI4S, frontier models, agents, atomistic simulation, hardware acceleration, and materials research.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "digest:email": "node scripts/generate-email.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "rss-parser": "^3.13.0"
+  }
+}
