@@ -10,7 +10,8 @@
     "digest:analysis:brief": "node scripts/export-analysis-brief.mjs",
     "digest:analysis:apply": "node scripts/apply-analysis-bundle.mjs",
     "digest:email": "node scripts/generate-email.mjs",
-    "digest:send": "node scripts/send-email.mjs"
+    "digest:send": "node scripts/send-email.mjs",
+    "readme:preview": "node scripts/capture-readme-preview.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -18,5 +19,8 @@
   "dependencies": {
     "express": "^5.1.0",
     "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
   }
 }
