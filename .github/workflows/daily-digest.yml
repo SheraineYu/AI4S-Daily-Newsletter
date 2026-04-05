@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Shanghai
-      DIGEST_TO_EMAIL: yusheraine@gmail.com
+      DIGEST_TO_EMAIL: ${{ vars.DIGEST_TO_EMAIL }}
       GMAIL_SMTP_HOST: ${{ secrets.GMAIL_SMTP_HOST }}
       GMAIL_SMTP_PORT: ${{ secrets.GMAIL_SMTP_PORT }}
       GMAIL_SMTP_USER: ${{ secrets.GMAIL_SMTP_USER }}
