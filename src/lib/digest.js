@@ -569,6 +569,7 @@ function scoreByRecency(publishedAt) {
 
 function scoreByKeywords(item, keywords = []) {
   const title = cleanText(item.title || "").toLowerCase();
+  const sourceLabel = cleanText(item.source || "").toLowerCase();
   const excerpt = cleanText(
     [item.contentSnippet, item.summary, item.content, item.excerpt]
       .filter(Boolean)
@@ -584,6 +585,7 @@ function scoreByKeywords(item, keywords = []) {
     score -= 2;
   }
   let titleHits = 0;
+  let sourceHits = 0;
   let categoryHits = 0;
   let bodyHits = 0;
 
@@ -593,6 +595,12 @@ function scoreByKeywords(item, keywords = []) {
     if (title.includes(needle)) {
       titleHits += 1;
       score += needle.length > 10 ? 5 : 4;
+      continue;
+    }
+
+    if (sourceLabel.includes(needle)) {
+      sourceHits += 1;
+      score += needle.length > 10 ? 4 : 3;
       continue;
     }
 
@@ -611,10 +619,12 @@ function scoreByKeywords(item, keywords = []) {
   return {
     score,
     titleHits,
+    sourceHits,
     categoryHits,
     bodyHits,
     strongMatch:
       titleHits > 0 ||
+      sourceHits > 0 ||
       categoryHits > 0 ||
       bodyHits > 1 ||
       (item.sourceOfficial && bodyHits > 0)
@@ -655,7 +665,7 @@ const AGENT_IMPORTANT_PATTERNS = [
 ];
 
 const HARDWARE_IMPORTANT_PATTERNS = [
-  /\b(fpga|asic|accelerator|chip|semiconductor|gpu|npu|hbm|memory|interconnect|packaging|fab|fabrication|export control|throughput|latency|tpu|trainium|inferentia|gaudi|rocm|wafer-scale|serving|compiler|kernel|rack-scale)\b/
+  /\b(fpga|asic|accelerator|chip|semiconductor|gpu|npu|hbm|memory|interconnect|packaging|fab|fabrication|export control|throughput|latency|tpu|neuron|trainium|inferentia|gaudi|rocm|mi300|mi350|wafer-scale|serving|compiler|runtime|kernel|rack-scale|cluster|supercomputer|hyperpod|scale-out)\b/
 ];
 
 const HARDWARE_MEDIA_NOISE_PATTERNS = [
@@ -664,7 +674,11 @@ const HARDWARE_MEDIA_NOISE_PATTERNS = [
 ];
 
 const HARDWARE_STRATEGIC_PATTERNS = [
-  /\b(export control|export controls|fab|fabrication|manufacturing|packaging|hbm|interconnect|gpu|npu|semiconductor|tpu|trainium|inferentia|gaudi|rocm|wafer-scale|serving|compiler|kernel|rack-scale)\b/
+  /\b(export control|export controls|fab|fabrication|manufacturing|packaging|hbm|interconnect|gpu|npu|semiconductor|tpu|neuron|trainium|inferentia|gaudi|rocm|mi300|mi350|wafer-scale|serving|runtime|compiler|kernel|rack-scale|cluster|supercomputer|hyperpod|scale-out)\b/
+];
+
+const HARDWARE_PLATFORM_UPDATE_PATTERNS = [
+  /\b(launch|launched|announce|announced|introduc|available|availability|preview|general availability|deploy|deployment|support|release highlights|highlights|new features?|enhancements?|benchmark|performance|throughput|latency|distributed training|training|inference|serving)\b/
 ];
 
 const GLOBAL_SUMMARY_NOISE_PATTERNS = [
@@ -689,7 +703,10 @@ const ATOMISTIC_DOMAIN_PATTERNS = [
   /\bcp2k\b/,
   /\bquantum espresso\b/,
   /\base\b/,
+  /\bdeepmd\b/,
+  /\bdeep potential\b/,
   /\bdeepmodeling\b/,
+  /\bmatgl\b/,
   /\bopen catalyst\b/,
   /\bcatalyst\b/,
   /\belectrocatalysis\b/,
@@ -729,6 +746,10 @@ const ATOMISTIC_IMPORTANT_PATTERNS = [
   /\balgorithm\b/,
   /\bworkflow\b/,
   /\bhybrid functional\b/
+];
+
+const ATOMISTIC_MAJOR_UPDATE_PATTERNS = [
+  /\b(announce|announced|introduc|available|availability|highlights?|new features?|enhancements?|support|checkpoint|pretrained|foundation model|model zoo|major reorganization|major update|workflow|inference|training)\b/
 ];
 
 const ATOMISTIC_NOISE_PATTERNS = [
@@ -802,7 +823,9 @@ function passesTopicSignalGate(topic, item) {
 
     return (
       matchesAnyPattern(text, HARDWARE_IMPORTANT_PATTERNS) ||
-      (item.sourceOfficial && matchesAnyPattern(text, HARDWARE_STRATEGIC_PATTERNS))
+      (item.sourceOfficial &&
+        matchesAnyPattern(text, HARDWARE_STRATEGIC_PATTERNS) &&
+        matchesAnyPattern(text, HARDWARE_PLATFORM_UPDATE_PATTERNS))
     );
   }
 
@@ -821,7 +844,8 @@ function passesTopicSignalGate(topic, item) {
     return (
       item.sourceOfficial &&
       matchesAnyPattern(text, ATOMISTIC_DOMAIN_PATTERNS) &&
-      matchesAnyPattern(text, ATOMISTIC_IMPORTANT_PATTERNS)
+      (matchesAnyPattern(text, ATOMISTIC_IMPORTANT_PATTERNS) ||
+        matchesAnyPattern(text, ATOMISTIC_MAJOR_UPDATE_PATTERNS))
     );
   }
 
@@ -2135,6 +2159,38 @@ async function fetchGithubCommits(source) {
 }
 
 async function fetchGithubReleases(source) {
+  if (/\/releases\.atom$/i.test(source.url)) {
+    const feed = await fetchAndParseXml(source.url);
+    return (feed.items || [])
+      .slice(0, DEFAULT_SOURCE_LIMIT)
+      .map((item) => {
+        const title = cleanText(coerceTextValue(item.title) || "Release update");
+        const link = coerceTextValue(item.link);
+        const guid = coerceTextValue(item.guid);
+        const excerpt = buildExcerpt(item);
+        const categories = Array.isArray(item.categories) ? item.categories : [];
+
+        return {
+          id: `${source.id}-${slugify(guid || link || title)}`,
+          title,
+          link,
+          sourceId: source.id,
+          source: source.label,
+          sourceKind: source.kind || "github-releases",
+          sourceType: source.type,
+          sourceOfficial: Boolean(source.official),
+          sourcePriority: source.priority || 0,
+          publishedAt: normaliseDate(
+            item.isoDate || item.pubDate || item.published || item.updated
+          ),
+          excerpt,
+          categories
+        };
+      })
+      .filter((item) => item.link)
+      .filter((item) => isHighImpactRelease(source, item.title, item.excerpt));
+  }
+
   const items = await fetchJson(source.url);
   return items
     .slice(0, DEFAULT_SOURCE_LIMIT)
