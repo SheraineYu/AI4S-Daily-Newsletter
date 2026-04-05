@@ -16,6 +16,11 @@ jobs:
       GMAIL_SMTP_USER: ${{ secrets.GMAIL_SMTP_USER }}
       GMAIL_SMTP_PASS: ${{ secrets.GMAIL_SMTP_PASS }}
       DIGEST_FROM_EMAIL: ${{ secrets.DIGEST_FROM_EMAIL }}
+      REMOTE_ANALYSIS_API_KEY: ${{ secrets.REMOTE_ANALYSIS_API_KEY }}
+      REMOTE_ANALYSIS_MODEL: ${{ secrets.REMOTE_ANALYSIS_MODEL }}
+      REMOTE_ANALYSIS_BASE_URL: ${{ secrets.REMOTE_ANALYSIS_BASE_URL }}
+      REMOTE_ANALYSIS_TIMEOUT_MS: ${{ secrets.REMOTE_ANALYSIS_TIMEOUT_MS }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
+    "digest:analysis:brief": "node scripts/export-analysis-brief.mjs",
+    "digest:analysis:apply": "node scripts/apply-analysis-bundle.mjs",
     "digest:email": "node scripts/generate-email.mjs",
     "digest:send": "node scripts/send-email.mjs"
   },

@@ -14,9 +14,10 @@ AI4S Daily Newsletter is a curated daily brief for frontier models, AI4S, atomis
 ## Editorial Principles
 
 - Recent first: the default window is the last seven days, with stronger preference for the last 24 to 72 hours
-- High-signal selection: the pipeline favors official announcements, strong papers, major releases, benchmarks, performance/scaling milestones, and material method changes
+- High-signal selection: the pipeline favors official announcements, strong papers, major releases, benchmarks, performance and scaling milestones, and material method changes
 - Low-noise filtering: routine commits, minor version churn, generic marketing posts, and stale items are filtered out
 - Topic framing: each topic includes `importance`, `confidence`, `why-it-matters`, and `next-step` analysis before the link list
+- Analysis fallback: topic framing can come from a local analysis bundle, an optional remote structured-analysis service, or the built-in template fallback
 
 ## Product Surfaces
 
@@ -86,6 +87,33 @@ This prints JSON with:
 - `plainText`
 - `html`
 
+### Generate a local analysis brief
+
+```bash
+npm run digest:analysis:brief
+```
+
+This writes a compact JSON briefing to `var/editorial-analysis/briefing.json` with:
+
+- the day's filtered topic signals
+- editorial priors for each topic
+- the exact JSON shape expected by the local analysis workflow
+- the output path for the validated analysis file
+
+### Apply a local analysis bundle
+
+```bash
+npm run digest:analysis:apply
+```
+
+By default this reads `var/editorial-analysis/candidate.json`, validates it, and saves the normalized result to `var/editorial-analysis/latest.json`.
+
+You can also provide a custom input file:
+
+```bash
+node scripts/apply-analysis-bundle.mjs --input path/to/analysis.json
+```
+
 ### Send a real email locally
 
 ```bash
@@ -119,6 +147,58 @@ Optional:
 - `GMAIL_SMTP_PORT` defaults to `465`
 - `DIGEST_FROM_EMAIL` defaults to `GMAIL_SMTP_USER`
 - `DIGEST_LOCALE` set to `zh` or `en`
+- `DIGEST_ANALYSIS_MODE` set to `hybrid`, `local`, `remote`, or `template` and defaults to `hybrid`
+- `LOCAL_ANALYSIS_FILE` defaults to `var/editorial-analysis/latest.json`
+- `LOCAL_ANALYSIS_CANDIDATE_FILE` defaults to `var/editorial-analysis/candidate.json`
+- `LOCAL_ANALYSIS_BRIEFING_FILE` defaults to `var/editorial-analysis/briefing.json`
+- `LOCAL_ANALYSIS_MAX_AGE_HOURS` defaults to `30`
+- `REMOTE_ANALYSIS_API_KEY` enables optional remote structured analysis when the mode allows it
+- `REMOTE_ANALYSIS_MODEL` selects the remote model or endpoint variant
+- `REMOTE_ANALYSIS_TIMEOUT_MS` defaults to `45000`
+- `REMOTE_ANALYSIS_BASE_URL` points to the remote structured-analysis API
+
+### Analysis mode behavior
+
+- `template`: always use the built-in rule-based analysis
+- `local`: use the local analysis file if it is current, otherwise fall back to template
+- `remote`: use the remote structured-analysis service when configured, otherwise fall back to template
+- `hybrid`: prefer the local analysis file, then the remote structured-analysis service if configured, then template
+
+## Local Analysis Workflow
+
+The local analysis path is designed for desktop automation rather than an in-process dependency.
+
+Typical flow:
+
+1. Run `npm run digest:analysis:brief`
+2. Read `var/editorial-analysis/briefing.json`
+3. Write a JSON analysis bundle to `var/editorial-analysis/candidate.json`
+4. Run `npm run digest:analysis:apply`
+5. Run `npm run digest:send`
+
+The JSON analysis bundle should include:
+
+- `generatedAt`
+- `digestDateKey`
+- `topics`
+
+Each topic entry should include:
+
+- `id`
+- `importanceLevel`
+- `confidenceLevel`
+- `importanceTextEn`
+- `importanceTextZh`
+- `confidenceTextEn`
+- `confidenceTextZh`
+- `whyItMattersEn`
+- `whyItMattersZh`
+- `nextStepTextEn`
+- `nextStepTextZh`
+- `actionsEn`
+- `actionsZh`
+
+`hybrid` mode is the recommended default: if the local analysis file is missing, stale, or invalid, the digest still renders using template analysis instead of failing.
 
 ## GitHub Actions
 
@@ -152,6 +232,9 @@ Recommended:
 - `GMAIL_SMTP_HOST=smtp.gmail.com`
 - `GMAIL_SMTP_PORT=465`
 - `DIGEST_FROM_EMAIL`
+- `REMOTE_ANALYSIS_API_KEY`
+- `REMOTE_ANALYSIS_MODEL`
+- `REMOTE_ANALYSIS_BASE_URL`
 
 The target recipient can be set in workflow environment or repository configuration. The current production workflow is configured for `yusheraine@gmail.com`.
 
@@ -175,8 +258,10 @@ public/
   styles.css          Visual design
 
 scripts/
-  generate-email.mjs  Build subject / text / html payload
-  send-email.mjs      Send the email over Gmail SMTP
+  export-analysis-brief.mjs  Build the compact topic briefing
+  apply-analysis-bundle.mjs  Validate and store local analysis JSON
+  generate-email.mjs         Build subject / text / html payload
+  send-email.mjs             Send the email over Gmail SMTP
 
 src/
   config/topics.js    Topics, source metadata, editorial hints

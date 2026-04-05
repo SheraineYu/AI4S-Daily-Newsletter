@@ -1,3 +1,5 @@
+﻿import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
 import Parser from "rss-parser";
 import { NEWS_SOURCES, TOPICS } from "../config/topics.js";
 
@@ -8,6 +10,7 @@ const DEFAULT_NEWS_LIMIT = 5;
 const DEFAULT_PAPER_LIMIT = 5;
 const DEFAULT_ACTION_LIMIT = 3;
 const DEFAULT_SOURCE_LIMIT = 40;
+const DEFAULT_LINK_METADATA_LIMIT = 8;
 const FETCH_TIMEOUT_MS = 20000;
 const FETCH_RETRY_COUNT = 2;
 const DEFAULT_MAX_NEWS_AGE_HOURS = 24 * 7;
@@ -16,10 +19,106 @@ const DEFAULT_PREFERRED_NEWS_AGE_HOURS = 24 * 3;
 const DEFAULT_PREFERRED_PAPER_AGE_HOURS = 24 * 3;
 const DEFAULT_MAX_ITEMS_PER_SOURCE = 2;
 const DEFAULT_MAX_SOFTWARE_ITEMS = 1;
+const DEFAULT_ANALYSIS_ITEM_LIMIT = 4;
+const DEFAULT_ANALYSIS_EXCERPT_LIMIT = 220;
+const DEFAULT_REMOTE_ANALYSIS_TIMEOUT_MS = 45000;
+const DEFAULT_LOCAL_ANALYSIS_PATH = "var/editorial-analysis/latest.json";
+const DEFAULT_LOCAL_ANALYSIS_CANDIDATE_PATH = "var/editorial-analysis/candidate.json";
+const DEFAULT_LOCAL_ANALYSIS_BRIEFING_PATH = "var/editorial-analysis/briefing.json";
+const DEFAULT_LOCAL_ANALYSIS_MAX_AGE_HOURS = 30;
 
 const LOCALE_MAP = {
   en: "en-US",
   zh: "zh-CN"
+};
+
+const ANALYSIS_PROVIDER_LABELS = {
+  template: {
+    en: "Template analysis",
+    zh: "模板分析"
+  },
+  local: {
+    en: "Local analysis",
+    zh: "本地分析"
+  },
+  remote: {
+    en: "Remote analysis",
+    zh: "远程分析"
+  }
+};
+
+const TOPIC_ANALYSIS_INSTRUCTIONS = [
+  "Use only the supplied topic data.",
+  "Reflect today's actual signals instead of evergreen commentary.",
+  "Keep the writing concise but insight-dense.",
+  "Connect today's developments to research direction, experiments, benchmarking, deployment, or scientific workflow decisions.",
+  "Do not invent facts, sources, papers, or claims that are not present in the input.",
+  "Return valid JSON only."
+];
+
+const TOPIC_ANALYSIS_SCHEMA = {
+  name: "topic_analysis_bundle",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["topics"],
+    properties: {
+      topics: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "id",
+            "importanceLevel",
+            "confidenceLevel",
+            "importanceTextEn",
+            "importanceTextZh",
+            "confidenceTextEn",
+            "confidenceTextZh",
+            "whyItMattersEn",
+            "whyItMattersZh",
+            "nextStepTextEn",
+            "nextStepTextZh",
+            "actionsEn",
+            "actionsZh"
+          ],
+          properties: {
+            id: { type: "string" },
+            importanceLevel: {
+              type: "string",
+              enum: ["high", "medium", "watch", "low"]
+            },
+            confidenceLevel: {
+              type: "string",
+              enum: ["high", "medium", "low"]
+            },
+            importanceTextEn: { type: "string" },
+            importanceTextZh: { type: "string" },
+            confidenceTextEn: { type: "string" },
+            confidenceTextZh: { type: "string" },
+            whyItMattersEn: { type: "string" },
+            whyItMattersZh: { type: "string" },
+            nextStepTextEn: { type: "string" },
+            nextStepTextZh: { type: "string" },
+            actionsEn: {
+              type: "array",
+              minItems: 3,
+              maxItems: 3,
+              items: { type: "string" }
+            },
+            actionsZh: {
+              type: "array",
+              minItems: 3,
+              maxItems: 3,
+              items: { type: "string" }
+            }
+          }
+        }
+      }
+    }
+  }
 };
 
 const RENDER_COPY = {
@@ -89,6 +188,10 @@ function cleanText(value = "") {
     .trim();
 }
 
+function stripBom(value = "") {
+  return String(value).replace(/^\uFEFF/, "");
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -101,6 +204,28 @@ function escapeHtml(value = "") {
 function normaliseDate(value) {
   const time = value ? Date.parse(value) : NaN;
   return Number.isNaN(time) ? null : new Date(time).toISOString();
+}
+
+function normaliseLooseDate(value) {
+  const text = cleanText(value);
+  if (!text) {
+    return null;
+  }
+
+  let match = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).toISOString();
+  }
+
+  match = text.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const [, month, day, yearSuffix] = match;
+    const year = Number(yearSuffix) >= 70 ? 1900 + Number(yearSuffix) : 2000 + Number(yearSuffix);
+    return new Date(Date.UTC(year, Number(month) - 1, Number(day))).toISOString();
+  }
+
+  return normaliseDate(text);
 }
 
 function getAgeHours(value) {
@@ -122,12 +247,12 @@ function isWithinAgeHours(value, maxAgeHours) {
 
 function formatDigestDate(value, locale = "zh") {
   if (!value) {
-    return locale === "zh" ? "未知时间" : "Unknown date";
+    return locale === "zh" ? "鏈煡鏃堕棿" : "Unknown date";
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return locale === "zh" ? "未知时间" : "Unknown date";
+    return locale === "zh" ? "鏈煡鏃堕棿" : "Unknown date";
   }
 
   return new Intl.DateTimeFormat(LOCALE_MAP[locale] || LOCALE_MAP.en, {
@@ -155,6 +280,27 @@ export function formatDigestDateKey(value) {
   );
 
   return `${lookup.year}-${lookup.month}-${lookup.day}`;
+}
+
+export function getLocalAnalysisFilePath() {
+  return path.resolve(
+    process.cwd(),
+    process.env.LOCAL_ANALYSIS_FILE || DEFAULT_LOCAL_ANALYSIS_PATH
+  );
+}
+
+export function getLocalAnalysisCandidateFilePath() {
+  return path.resolve(
+    process.cwd(),
+    process.env.LOCAL_ANALYSIS_CANDIDATE_FILE || DEFAULT_LOCAL_ANALYSIS_CANDIDATE_PATH
+  );
+}
+
+export function getLocalAnalysisBriefingFilePath() {
+  return path.resolve(
+    process.cwd(),
+    process.env.LOCAL_ANALYSIS_BRIEFING_FILE || DEFAULT_LOCAL_ANALYSIS_BRIEFING_PATH
+  );
 }
 
 function trimText(value = "", limit = 120) {
@@ -187,6 +333,35 @@ function flattenCategoryValue(value) {
       .map(flattenCategoryValue)
       .filter(Boolean)
       .join(" ");
+  }
+
+  return "";
+}
+
+function coerceTextValue(value) {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(coerceTextValue).filter(Boolean).join(" ");
+  }
+
+  if (typeof value === "object") {
+    const flattened = flattenCategoryValue(value);
+    if (flattened) {
+      return flattened;
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      return "";
+    }
   }
 
   return "";
@@ -246,6 +421,47 @@ function buildLocalizedArray(en = [], zh = en) {
   return { en, zh: zh?.length ? zh : en };
 }
 
+function buildAnalysisProvider(id = "template", generatedAt = null) {
+  const labels =
+    id === "local"
+      ? { en: "Local analysis", zh: "鏈湴鍒嗘瀽" }
+      : id === "remote"
+        ? { en: "Remote analysis", zh: "杩滅▼鍒嗘瀽" }
+        : { en: "Template analysis", zh: "模板分析" };
+  return {
+    id,
+    label: buildLocalizedText(labels.en, labels.zh),
+    generatedAt: normaliseDate(generatedAt)
+  };
+}
+
+function cleanActionList(values, fallbackValues = []) {
+  const cleaned = (Array.isArray(values) ? values : [])
+    .map((value) => cleanText(value))
+    .filter(Boolean)
+    .slice(0, DEFAULT_ACTION_LIMIT);
+
+  if (cleaned.length === DEFAULT_ACTION_LIMIT) {
+    return cleaned;
+  }
+
+  const fallback = (Array.isArray(fallbackValues) ? fallbackValues : [])
+    .map((value) => cleanText(value))
+    .filter(Boolean);
+
+  for (const value of fallback) {
+    if (cleaned.length >= DEFAULT_ACTION_LIMIT) {
+      break;
+    }
+
+    if (!cleaned.includes(value)) {
+      cleaned.push(value);
+    }
+  }
+
+  return cleaned.slice(0, DEFAULT_ACTION_LIMIT);
+}
+
 function pickLocalized(value, locale = "en") {
   if (value && typeof value === "object" && ("en" in value || "zh" in value)) {
     return value[locale] || value.en || value.zh || "";
@@ -270,6 +486,72 @@ function buildTopicText(topic) {
       topic.nextStepPromptsZh || []
     )
   };
+}
+
+function getAnalysisMode() {
+  const mode = String(process.env.DIGEST_ANALYSIS_MODE || "hybrid")
+    .trim()
+    .toLowerCase();
+
+  if (mode === "template" || mode === "remote" || mode === "hybrid" || mode === "local") {
+    return mode;
+  }
+
+  return "hybrid";
+}
+
+function shouldAttemptLocalAnalysis() {
+  const mode = getAnalysisMode();
+  return mode === "local" || mode === "hybrid";
+}
+
+function shouldAttemptRemoteAnalysis() {
+  const mode = getAnalysisMode();
+
+  if (mode === "template" || mode === "local") {
+    return false;
+  }
+
+  return Boolean(
+    process.env.REMOTE_ANALYSIS_API_KEY?.trim() &&
+      process.env.REMOTE_ANALYSIS_BASE_URL?.trim() &&
+      process.env.REMOTE_ANALYSIS_MODEL?.trim()
+  );
+}
+
+function buildAnalysisSignalDigest(items, limit = DEFAULT_ANALYSIS_ITEM_LIMIT) {
+  return items.slice(0, limit).map((item) => ({
+    title: trimText(cleanText(item.title || ""), 180),
+    source: cleanText(item.source || ""),
+    publishedAt: item.publishedAt || null,
+    excerpt: trimText(cleanText(item.excerpt || ""), DEFAULT_ANALYSIS_EXCERPT_LIMIT),
+    official: Boolean(item.sourceOfficial),
+    type: item.sourceType || "news"
+  }));
+}
+
+function buildTopicAnalysisPromptPayload(topicDrafts) {
+  return topicDrafts.map(({ topic, topicText, news, papers, analysis }) => ({
+    id: topic.id,
+    title: pickLocalized(topicText.title, "en"),
+    titleZh: pickLocalized(topicText.title, "zh"),
+    description: pickLocalized(topicText.description, "en"),
+    descriptionZh: pickLocalized(topicText.description, "zh"),
+    focusAreas: pickLocalized(topicText.focusAreas, "en"),
+    focusAreasZh: pickLocalized(topicText.focusAreas, "zh"),
+    warningFocus: pickLocalized(topicText.warningFocus, "en"),
+    warningFocusZh: pickLocalized(topicText.warningFocus, "zh"),
+    fallbackImportanceLevel: analysis.importance.level,
+    fallbackConfidenceLevel: analysis.confidence.level,
+    counts: {
+      news: news.length,
+      papers: papers.length,
+      sources: new Set([...news, ...papers].map((item) => item.source)).size,
+      officialSignals: [...news, ...papers].filter((item) => item.sourceOfficial).length
+    },
+    news: buildAnalysisSignalDigest(news),
+    papers: buildAnalysisSignalDigest(papers)
+  }));
 }
 
 function scoreByRecency(publishedAt) {
@@ -360,7 +642,7 @@ const GITHUB_RELEASE_NOISE_PATTERNS = [
 
 const FRONTIER_IMPORTANT_PATTERNS = [
   /\b(model|models|launch|launched|announce|announced|introduc|release|released|reasoning|multimodal|agent|tool use|benchmark|evaluation|api|checkpoint|open model)\b/,
-  /\b(gemma|gemini|gpt|claude|llama|grok|mistral|deepseek|qwen|codex)\b/
+  /\b(gemma|gemini|gpt|claude|llama|grok|mistral|deepseek|qwen)\b/
 ];
 
 const FRONTIER_MEDIA_NOISE_PATTERNS = [
@@ -373,7 +655,7 @@ const AGENT_IMPORTANT_PATTERNS = [
 ];
 
 const HARDWARE_IMPORTANT_PATTERNS = [
-  /\b(fpga|asic|accelerator|chip|semiconductor|gpu|npu|hbm|memory|interconnect|packaging|fab|fabrication|export control|throughput|latency)\b/
+  /\b(fpga|asic|accelerator|chip|semiconductor|gpu|npu|hbm|memory|interconnect|packaging|fab|fabrication|export control|throughput|latency|tpu|trainium|inferentia|gaudi|rocm|wafer-scale|serving|compiler|kernel|rack-scale)\b/
 ];
 
 const HARDWARE_MEDIA_NOISE_PATTERNS = [
@@ -382,7 +664,7 @@ const HARDWARE_MEDIA_NOISE_PATTERNS = [
 ];
 
 const HARDWARE_STRATEGIC_PATTERNS = [
-  /\b(export control|export controls|fab|fabrication|manufacturing|packaging|hbm|interconnect|gpu|npu|semiconductor)\b/
+  /\b(export control|export controls|fab|fabrication|manufacturing|packaging|hbm|interconnect|gpu|npu|semiconductor|tpu|trainium|inferentia|gaudi|rocm|wafer-scale|serving|compiler|kernel|rack-scale)\b/
 ];
 
 const GLOBAL_SUMMARY_NOISE_PATTERNS = [
@@ -404,7 +686,13 @@ const GLOBAL_SPECULATION_NOISE_PATTERNS = [
 const ATOMISTIC_DOMAIN_PATTERNS = [
   /\babacus\b/,
   /\blammps\b/,
+  /\bcp2k\b/,
+  /\bquantum espresso\b/,
+  /\base\b/,
   /\bdeepmodeling\b/,
+  /\bopen catalyst\b/,
+  /\bcatalyst\b/,
+  /\belectrocatalysis\b/,
   /\bmaterials project\b/,
   /\bpymatgen\b/,
   /\boqmd\b/,
@@ -424,8 +712,11 @@ const ATOMISTIC_IMPORTANT_PATTERNS = [
   /\brelease notes?\b/,
   /\bfeature release\b/,
   /\bstable release\b/,
+  /\bavailable for download\b/,
   /\bdatabase version\b/,
   /\bbenchmark\b/,
+  /\bdataset\b/,
+  /\bmodels?\b/,
   /\bperformance\b/,
   /\bscal(?:e|ing|able)\b/,
   /\baccelerat/i,
@@ -509,7 +800,10 @@ function passesTopicSignalGate(topic, item) {
       return false;
     }
 
-    return item.sourceOfficial || matchesAnyPattern(text, HARDWARE_IMPORTANT_PATTERNS);
+    return (
+      matchesAnyPattern(text, HARDWARE_IMPORTANT_PATTERNS) ||
+      (item.sourceOfficial && matchesAnyPattern(text, HARDWARE_STRATEGIC_PATTERNS))
+    );
   }
 
   if (topic.id === "global-watchlist") {
@@ -809,7 +1103,7 @@ function buildTopicAnalysis(topic, topicText, news, papers) {
     : "today's available sources";
   const sourcesZh = sourceLabels.length
     ? listToSentence(sourceLabels, "zh")
-    : "当前可用来源";
+    : "褰撳墠鍙敤鏉ユ簮";
   const focusSummaryEn = listToSentence(focusAreasEn, "en");
   const focusSummaryZh = listToSentence(focusAreasZh, "zh");
   const typeSummaryEn = listToSentence(
@@ -822,9 +1116,9 @@ function buildTopicAnalysis(topic, topicText, news, papers) {
   );
   const typeSummaryZh = listToSentence(
     [...evidenceTypes].map((type) => {
-      if (type === "paper") return "论文";
-      if (type === "software") return "软件更新";
-      return "新闻";
+      if (type === "paper") return "璁烘枃";
+      if (type === "software") return "杞欢鏇存柊";
+      return "鏂伴椈";
     }),
     "zh"
   );
@@ -854,7 +1148,7 @@ function buildTopicAnalysis(topic, topicText, news, papers) {
         : `Low confidence. Today's cluster is either sparse or mostly single-source, so treat it as an early indicator rather than a firm conclusion.`;
   const confidenceTextZh =
     confidenceLevel === "high"
-      ? `置信度较高。当前信号横跨 ${sourcesZh}，并覆盖 ${typeSummaryZh}，单一来源偏差相对较低。`
+      ? `置信度较高。当前信号横跨 ${sourcesZh}，并覆盖 ${typeSummaryZh}，单一路径偏差相对较低。`
       : confidenceLevel === "medium"
         ? `置信度中等。当前至少存在一条可信信号链，但证据仍比较集中，主要来自 ${sourcesZh}。`
         : `置信度较低。今天的信号要么数量偏少，要么过于集中在单一路径，更适合作为早期预警，而不是确定结论。`;
@@ -868,7 +1162,7 @@ function buildTopicAnalysis(topic, topicText, news, papers) {
       : "Keep the next-step list ready so weak signals can be converted into action as soon as better evidence appears.";
   const nextStepTextZh =
     signalCount > 0
-      ? "建议把这个专题从被动阅读推进到具体监控、实验或内部讨论，优先执行下面的动作。"
+      ? "建议把这个专题从被动阅读推进到具体跟踪、实验或内部讨论，优先执行下面的动作。"
       : "先保留下一步动作清单，等更强证据出现时再迅速转成执行。";
 
   return {
@@ -895,8 +1189,304 @@ function buildTopicAnalysis(topic, topicText, news, papers) {
       text: buildLocalizedText(nextStepTextEn, nextStepTextZh),
       actions: buildLocalizedArray(nextPromptsEn, nextPromptsZh)
     },
-    warning: buildLocalizedText(warningEn, warningZh)
+    warning: buildLocalizedText(warningEn, warningZh),
+    provider: buildAnalysisProvider("template")
   };
+}
+
+function mergeExternalTopicAnalysis(
+  fallbackAnalysis,
+  externalAnalysis,
+  topicText,
+  providerId = "template",
+  generatedAt = null
+) {
+  if (!externalAnalysis) {
+    return fallbackAnalysis;
+  }
+
+  const fallbackActionsEn = pickLocalized(topicText.nextStepPrompts, "en");
+  const fallbackActionsZh = pickLocalized(topicText.nextStepPrompts, "zh");
+  const importanceLevel = externalAnalysis.importanceLevel || fallbackAnalysis.importance.level;
+  const confidenceLevel = externalAnalysis.confidenceLevel || fallbackAnalysis.confidence.level;
+
+  return {
+    importance: {
+      level: importanceLevel,
+      label: buildLocalizedText(
+        describeImportanceLevel(importanceLevel, "en"),
+        describeImportanceLevel(importanceLevel, "zh")
+      ),
+      text: buildLocalizedText(
+        cleanText(externalAnalysis.importanceTextEn) ||
+          pickLocalized(fallbackAnalysis.importance.text, "en"),
+        cleanText(externalAnalysis.importanceTextZh) ||
+          pickLocalized(fallbackAnalysis.importance.text, "zh")
+      )
+    },
+    confidence: {
+      level: confidenceLevel,
+      label: buildLocalizedText(
+        describeConfidenceLevel(confidenceLevel, "en"),
+        describeConfidenceLevel(confidenceLevel, "zh")
+      ),
+      text: buildLocalizedText(
+        cleanText(externalAnalysis.confidenceTextEn) ||
+          pickLocalized(fallbackAnalysis.confidence.text, "en"),
+        cleanText(externalAnalysis.confidenceTextZh) ||
+          pickLocalized(fallbackAnalysis.confidence.text, "zh")
+      )
+    },
+    whyItMatters: {
+      text: buildLocalizedText(
+        cleanText(externalAnalysis.whyItMattersEn) ||
+          pickLocalized(fallbackAnalysis.whyItMatters.text, "en"),
+        cleanText(externalAnalysis.whyItMattersZh) ||
+          pickLocalized(fallbackAnalysis.whyItMatters.text, "zh")
+      )
+    },
+    nextStep: {
+      text: buildLocalizedText(
+        cleanText(externalAnalysis.nextStepTextEn) ||
+          pickLocalized(fallbackAnalysis.nextStep.text, "en"),
+        cleanText(externalAnalysis.nextStepTextZh) ||
+          pickLocalized(fallbackAnalysis.nextStep.text, "zh")
+      ),
+      actions: buildLocalizedArray(
+        cleanActionList(externalAnalysis.actionsEn, fallbackActionsEn),
+        cleanActionList(externalAnalysis.actionsZh, fallbackActionsZh)
+      )
+    },
+    warning: fallbackAnalysis.warning,
+    provider: buildAnalysisProvider(providerId, generatedAt)
+  };
+}
+
+function createAnalysisError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function normaliseTopicAnalysisEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const id = cleanText(entry.id);
+  const importanceLevel = cleanText(entry.importanceLevel).toLowerCase();
+  const confidenceLevel = cleanText(entry.confidenceLevel).toLowerCase();
+
+  if (!id) {
+    return null;
+  }
+
+  if (!["high", "medium", "watch", "low"].includes(importanceLevel)) {
+    return null;
+  }
+
+  if (!["high", "medium", "low"].includes(confidenceLevel)) {
+    return null;
+  }
+
+  return {
+    id,
+    importanceLevel,
+    confidenceLevel,
+    importanceTextEn: cleanText(entry.importanceTextEn),
+    importanceTextZh: cleanText(entry.importanceTextZh),
+    confidenceTextEn: cleanText(entry.confidenceTextEn),
+    confidenceTextZh: cleanText(entry.confidenceTextZh),
+    whyItMattersEn: cleanText(entry.whyItMattersEn),
+    whyItMattersZh: cleanText(entry.whyItMattersZh),
+    nextStepTextEn: cleanText(entry.nextStepTextEn),
+    nextStepTextZh: cleanText(entry.nextStepTextZh),
+    actionsEn: cleanActionList(entry.actionsEn),
+    actionsZh: cleanActionList(entry.actionsZh)
+  };
+}
+
+function normaliseTopicAnalysisBundle(bundle, { allowedTopicIds } = {}) {
+  const allowedIds = allowedTopicIds || new Set(TOPICS.map((topic) => topic.id));
+  const rawTopics = Array.isArray(bundle?.topics) ? bundle.topics : [];
+  const topics = rawTopics
+    .map((entry) => normaliseTopicAnalysisEntry(entry))
+    .filter((entry) => entry && allowedIds.has(entry.id));
+
+  if (!topics.length) {
+    throw createAnalysisError(
+      "invalid",
+      "Topic analysis bundle did not include any valid newsletter topics"
+    );
+  }
+
+  const generatedAt = normaliseDate(bundle?.generatedAt || new Date().toISOString());
+  const digestDateKey = cleanText(bundle?.digestDateKey) || formatDigestDateKey(generatedAt);
+
+  return {
+    source: cleanText(bundle?.source) || "local-analysis",
+    generatedAt,
+    digestDateKey,
+    topics
+  };
+}
+
+async function loadLocalTopicAnalyses(topicDrafts, { digestDateKey } = {}) {
+  const filePath = getLocalAnalysisFilePath();
+  const allowedTopicIds = new Set(topicDrafts.map(({ topic }) => topic.id));
+
+  let rawText = "";
+  let stats = null;
+
+  try {
+    [rawText, stats] = await Promise.all([readFile(filePath, "utf8"), stat(filePath)]);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw createAnalysisError("absent", `Local analysis file not found at ${filePath}`);
+    }
+
+    throw createAnalysisError(
+      "unreadable",
+      `Failed to read local analysis file at ${filePath}: ${error.message}`
+    );
+  }
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(stripBom(rawText));
+  } catch (error) {
+    throw createAnalysisError(
+      "invalid",
+      `Local analysis file is not valid JSON at ${filePath}: ${error.message}`
+    );
+  }
+
+  const bundle = normaliseTopicAnalysisBundle(parsed, { allowedTopicIds });
+  const expectedDateKey = digestDateKey || formatDigestDateKey(new Date().toISOString());
+  if (bundle.digestDateKey !== expectedDateKey) {
+    throw createAnalysisError(
+      "stale",
+      `Local analysis is for ${bundle.digestDateKey}, expected ${expectedDateKey}`
+    );
+  }
+
+  const freshnessAnchor = bundle.generatedAt || normaliseDate(stats?.mtime);
+  const maxAgeHours = Number(
+    process.env.LOCAL_ANALYSIS_MAX_AGE_HOURS || DEFAULT_LOCAL_ANALYSIS_MAX_AGE_HOURS
+  );
+  if (
+    Number.isFinite(maxAgeHours) &&
+    maxAgeHours > 0 &&
+    !isWithinAgeHours(freshnessAnchor, maxAgeHours)
+  ) {
+    throw createAnalysisError(
+      "stale",
+      `Local analysis is older than ${maxAgeHours} hours`
+    );
+  }
+
+  return {
+    generatedAt: freshnessAnchor,
+    filePath,
+    map: new Map(bundle.topics.map((entry) => [entry.id, entry]))
+  };
+}
+
+export async function writeLocalTopicAnalysisBundle(bundle, { filePath } = {}) {
+  const targetPath = path.resolve(filePath || getLocalAnalysisFilePath());
+  const normalised = normaliseTopicAnalysisBundle(bundle);
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await writeFile(`${targetPath}`, `${JSON.stringify(normalised, null, 2)}\n`, "utf8");
+  return {
+    ...normalised,
+    filePath: targetPath
+  };
+}
+
+async function generateRemoteTopicAnalyses(topicDrafts) {
+  const apiKey = process.env.REMOTE_ANALYSIS_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("REMOTE_ANALYSIS_API_KEY is not configured");
+  }
+
+  const model = String(process.env.REMOTE_ANALYSIS_MODEL || "").trim();
+  if (!model) {
+    throw new Error("REMOTE_ANALYSIS_MODEL is not configured");
+  }
+  const timeoutMs = Number(
+    process.env.REMOTE_ANALYSIS_TIMEOUT_MS || DEFAULT_REMOTE_ANALYSIS_TIMEOUT_MS
+  );
+  const baseUrl = String(process.env.REMOTE_ANALYSIS_BASE_URL || "").replace(/\/+$/, "");
+  if (!baseUrl) {
+    throw new Error("REMOTE_ANALYSIS_BASE_URL is not configured");
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const payload = {
+    model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are the research editor for AI4S Daily Newsletter. Use only the provided topic data. Write concise but insight-dense analysis that reflects the actual daily signals, not generic evergreen commentary. Prioritize what changed, how credible the signal is, why it matters for research and experimentation, and what concrete next steps should be tried next. Avoid hype, avoid invented facts, and do not reference sources or papers that are not present in the input. Chinese should read naturally, not as literal translation."
+      },
+      {
+        role: "user",
+        content: [
+          "Generate bilingual topic analysis for the daily newsletter.",
+          ...TOPIC_ANALYSIS_INSTRUCTIONS,
+          "For each topic:",
+          "- set importanceLevel to high, medium, watch, or low based on today's actual signals",
+          "- set confidenceLevel to high, medium, or low based on corroboration, source quality, and evidence diversity",
+          "- importanceText should explain what changed or why today's cluster deserves attention",
+          "- confidenceText should explain why the signal is or is not reliable",
+          "- whyItMatters should connect today's items to research, benchmarking, modeling, deployment, or scientific workflow decisions",
+          "- nextStepText should state the strategic action for today",
+          "- actionsEn and actionsZh should each contain exactly 3 concrete, research-useful next ideas",
+          "- stay grounded in the supplied items and topic priors",
+          "",
+          JSON.stringify(buildTopicAnalysisPromptPayload(topicDrafts))
+        ].join("\n")
+      }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: TOPIC_ANALYSIS_SCHEMA
+    }
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(`Remote analysis request failed with ${response.status}: ${rawText}`);
+    }
+
+    const data = JSON.parse(rawText);
+    const content = data.choices?.[0]?.message?.content;
+    if (!content || typeof content !== "string") {
+      throw new Error("Remote analysis response did not include structured content");
+    }
+
+    const parsed = JSON.parse(content);
+    const topicEntries = Array.isArray(parsed?.topics) ? parsed.topics : [];
+    return {
+      generatedAt: new Date().toISOString(),
+      map: new Map(topicEntries.map((entry) => [entry.id, entry]))
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function toPublicTopic(topic, news, papers, analysis) {
@@ -1252,10 +1842,16 @@ async function parseFeed(source) {
   const feed = await fetchAndParseXml(source.url);
   return (feed.items || [])
     .slice(0, DEFAULT_SOURCE_LIMIT)
-    .map((item) => ({
-      id: `${source.id}-${slugify(item.id || item.guid || item.link || item.title)}`,
-      title: cleanText(item.title || "Untitled"),
-      link: item.link || "",
+    .map((item) => {
+      const link = coerceTextValue(item.link);
+      const guid = coerceTextValue(item.guid);
+      const itemId = coerceTextValue(item.id);
+      const title = cleanText(coerceTextValue(item.title) || "Untitled");
+
+      return {
+      id: `${source.id}-${slugify(itemId || guid || link || title)}`,
+      title,
+      link,
       sourceId: source.id,
       source: source.label,
       sourceKind: source.kind || "rss",
@@ -1267,7 +1863,7 @@ async function parseFeed(source) {
       ),
       excerpt: buildExcerpt(item),
       categories: Array.isArray(item.categories) ? item.categories : []
-    }))
+    };})
     .filter((item) => item.title && item.link);
 }
 
@@ -1372,18 +1968,14 @@ function buildOverview(topics) {
   };
 }
 
-export async function buildDigest({ force = false } = {}) {
-  const now = Date.now();
-  if (!force && digestCache.payload && now - digestCache.generatedAt < CACHE_TTL_MS) {
-    return digestCache.payload;
-  }
-
+async function buildDigestDraft() {
+  const generatedAt = new Date().toISOString();
   const { items: corpus, failures } = await fetchNewsCorpus();
   const paperResults = await Promise.allSettled(
     TOPICS.map((topic) => fetchArxivPapers(topic, topic.paperLimit || DEFAULT_PAPER_LIMIT))
   );
 
-  const topics = TOPICS.map((topic, index) => {
+  const topicDrafts = TOPICS.map((topic, index) => {
     const paperResult = paperResults[index];
     const papers = paperResult.status === "fulfilled" ? paperResult.value : [];
 
@@ -1398,11 +1990,103 @@ export async function buildDigest({ force = false } = {}) {
     const topicText = buildTopicText(topic);
     const analysis = buildTopicAnalysis(topic, topicText, news, papers);
 
-    return toPublicTopic(topic, news, papers, analysis);
+    return {
+      topic,
+      topicText,
+      news,
+      papers,
+      analysis
+    };
+  });
+
+  return {
+    generatedAt,
+    failures,
+    topicDrafts
+  };
+}
+
+export async function buildLocalAnalysisBriefing({ force = true } = {}) {
+  const { generatedAt, failures, topicDrafts } = await buildDigestDraft();
+  return {
+    generatedAt,
+    digestDateKey: formatDigestDateKey(generatedAt),
+    analysisMode: getAnalysisMode(),
+    outputFile: getLocalAnalysisFilePath(),
+    candidateFile: getLocalAnalysisCandidateFilePath(),
+    instructions: TOPIC_ANALYSIS_INSTRUCTIONS,
+    outputSchema: TOPIC_ANALYSIS_SCHEMA.schema,
+    topics: buildTopicAnalysisPromptPayload(topicDrafts),
+    failures
+  };
+}
+
+export async function buildDigest({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && digestCache.payload && now - digestCache.generatedAt < CACHE_TTL_MS) {
+    return digestCache.payload;
+  }
+
+  const { generatedAt, failures, topicDrafts } = await buildDigestDraft();
+  const digestDateKey = formatDigestDateKey(generatedAt);
+
+  let localAnalysisResult = null;
+  if (shouldAttemptLocalAnalysis()) {
+    try {
+      localAnalysisResult = await loadLocalTopicAnalyses(topicDrafts, { digestDateKey });
+    } catch (error) {
+      if (error.code !== "absent" || getAnalysisMode() === "local") {
+        failures.push({
+          source: "Local analysis",
+          message: error.message || "Local analysis failed; using fallback"
+        });
+      }
+    }
+  }
+
+  let remoteAnalysisResult = null;
+  if (!localAnalysisResult && shouldAttemptRemoteAnalysis()) {
+    try {
+      remoteAnalysisResult = await generateRemoteTopicAnalyses(topicDrafts);
+    } catch (error) {
+      failures.push({
+        source: "Remote analysis",
+        message: error.message || "Remote analysis failed; using template fallback"
+      });
+    }
+  } else if (getAnalysisMode() === "remote") {
+    failures.push({
+      source: "Remote analysis",
+      message: "Remote analysis settings are missing; using template fallback"
+    });
+  }
+
+  const topics = topicDrafts.map(({ topic, topicText, news, papers, analysis }) => {
+    const localAnalysis = localAnalysisResult?.map?.get(topic.id);
+    const remoteAnalysis = remoteAnalysisResult?.map?.get(topic.id);
+    const mergedAnalysis = localAnalysis
+      ? mergeExternalTopicAnalysis(
+          analysis,
+          localAnalysis,
+          topicText,
+          "local",
+          localAnalysisResult.generatedAt
+        )
+      : remoteAnalysis
+        ? mergeExternalTopicAnalysis(
+            analysis,
+            remoteAnalysis,
+            topicText,
+            "remote",
+            remoteAnalysisResult.generatedAt
+          )
+        : analysis;
+
+    return toPublicTopic(topic, news, papers, mergedAnalysis);
   });
 
   const payload = {
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     overview: buildOverview(topics),
     failures,
     topics
@@ -1497,6 +2181,14 @@ async function fetchHtmlNews(source) {
     return extractDeepModelingCategoryItems(html, source);
   }
 
+  if (source.extractor === "open-catalyst-project") {
+    return extractOpenCatalystProjectItems(html, source);
+  }
+
+  if (source.extractor === "isomorphic-labs-news") {
+    return extractIsomorphicLabsNewsItems(html, source);
+  }
+
   if (source.extractor === "materials-project-db-versions") {
     return extractMaterialsProjectDatabaseVersions(html, source);
   }
@@ -1505,8 +2197,36 @@ async function fetchHtmlNews(source) {
     return extractLammpsDownloadItems(html, source);
   }
 
+  if (source.extractor === "cp2k-news") {
+    return extractCp2kNewsItems(html, source);
+  }
+
+  if (source.extractor === "ase-release-notes") {
+    return extractAseReleaseNotesItems(html, source);
+  }
+
   if (source.extractor === "oqmd-download") {
     return extractOqmdDownloadItems(html, source);
+  }
+
+  if (source.extractor === "google-cloud-compute") {
+    return extractGoogleCloudComputeItems(html, source);
+  }
+
+  if (source.extractor === "amd-ai-blogs") {
+    return extractAmdAiBlogItems(html, source);
+  }
+
+  if (source.extractor === "cerebras-blog") {
+    return extractCerebrasBlogItems(html, source);
+  }
+
+  if (source.extractor === "groq-newsroom") {
+    return extractGroqNewsroomItems(html, source);
+  }
+
+  if (source.extractor === "nist-magnetics") {
+    return extractNistMagneticsItems(html, source);
   }
 
   throw new Error(`Unknown HTML extractor: ${source.extractor}`);
@@ -1563,10 +2283,11 @@ function extractWindowedHtmlItems(
 }
 
 function buildSourceItem(source, values = {}) {
+  const resolvedLink = values.link ? new URL(values.link, source.url).toString() : source.url;
   return {
-    id: values.id || `${source.id}-${slugify(values.link || values.title || Date.now())}`,
+    id: values.id || `${source.id}-${slugify(resolvedLink || values.title || Date.now())}`,
     title: cleanText(values.title || "Untitled"),
-    link: values.link || source.url,
+    link: resolvedLink,
     sourceId: source.id,
     source: source.label,
     sourceKind: source.kind || "html-news",
@@ -1708,6 +2429,319 @@ function extractOqmdDownloadItems(html, source) {
   }
 
   return items.slice(0, DEFAULT_SOURCE_LIMIT);
+}
+
+function normalisePageTitle(value = "") {
+  return cleanText(value).replace(
+    /\s+[|鈥?]\s+(?:Google Cloud Blog|Google Cloud|AMD|Cerebras|Groq|Isomorphic Labs|NIST|Quantum Espresso).*$/i,
+    ""
+  );
+}
+
+function cleanSeedExcerpt(value = "") {
+  const text = cleanText(value);
+  if (!text) {
+    return "";
+  }
+
+  return /^by\s.+\s+鈥s+\d+-minute read$/i.test(text) ? "" : text;
+}
+
+async function enrichCandidatesWithPageMetadata(
+  source,
+  candidates,
+  { limit = DEFAULT_LINK_METADATA_LIMIT, defaultCategories = [] } = {}
+) {
+  const selected = [];
+  const seen = new Set();
+
+  for (const candidate of candidates) {
+    const link = new URL(candidate.link, source.url).toString();
+    if (seen.has(link)) {
+      continue;
+    }
+
+    seen.add(link);
+    selected.push({
+      ...candidate,
+      link
+    });
+
+    if (selected.length >= limit) {
+      break;
+    }
+  }
+
+  const settled = await Promise.allSettled(
+    selected.map(async (candidate) => {
+      let title = cleanText(candidate.title || "");
+      let excerpt = cleanSeedExcerpt(candidate.excerpt || "");
+      let publishedAt = normaliseLooseDate(candidate.publishedAt);
+
+      try {
+        const pageHtml = await fetchText(candidate.link, {
+          "User-Agent": "AI4S-Digest/1.0 (+https://local.newsletter)"
+        });
+        const pageTitle = normalisePageTitle(
+          extractFirstMatch(pageHtml, [
+            /<meta property="og:title" content="([^"]+)"/i,
+            /<meta name="twitter:title" content="([^"]+)"/i,
+            /<meta name="dcterms\.title" content="([^"]+)"/i,
+            /<title>([\s\S]*?)<\/title>/i
+          ])
+        );
+        const pageExcerpt = cleanSeedExcerpt(
+          extractFirstMatch(pageHtml, [
+            /<meta name="description" content="([^"]+)"/i,
+            /<meta property="og:description" content="([^"]+)"/i,
+            /<meta name="twitter:description" content="([^"]+)"/i,
+            /<meta name="dcterms\.description" content="([^"]+)"/i
+          ])
+        );
+        const pagePublishedAt = normaliseLooseDate(
+          extractFirstMatch(pageHtml, [
+            /<meta property="article:published_time" content="([^"]+)"/i,
+            /<meta name="published_time" content="([^"]+)"/i,
+            /<meta name="dcterms\.date" content="([^"]+)"/i,
+            /<meta name="dcterms\.created" content="([^"]+)"/i,
+            /<meta property="og:updated_time" content="([^"]+)"/i,
+            /"datePublished":"([^"]+)"/i,
+            /"publishedAt":"([^"]+)"/i,
+            /<time[^>]+datetime="([^"]+)"/i
+          ])
+        );
+
+        title = title || pageTitle;
+        excerpt = pageExcerpt || excerpt;
+        publishedAt = pagePublishedAt || publishedAt;
+      } catch (error) {
+        // Fall back to listing metadata when the linked article cannot be fetched.
+      }
+
+      if (!title || !candidate.link) {
+        return null;
+      }
+
+      return buildSourceItem(source, {
+        id: `${source.id}-${slugify(candidate.link)}`,
+        title,
+        link: candidate.link,
+        publishedAt,
+        excerpt: excerpt || title,
+        categories: [...defaultCategories, ...(candidate.categories || [])]
+      });
+    })
+  );
+
+  return settled
+    .filter((result) => result.status === "fulfilled" && result.value)
+    .map((result) => result.value)
+    .slice(0, DEFAULT_SOURCE_LIMIT);
+}
+
+function extractOpenCatalystProjectItems(html, source) {
+  const items = [];
+  const pattern =
+    /<p class="mb-0 text-black">(?<date>\d{2}-\d{2}-\d{2})<\/p>[\s\S]*?<p class="my-2 news-copy overflow-hidden"[^>]*>(?<title>[\s\S]*?)<\/p>[\s\S]*?<a[^>]+href="(?<link>[^"]+)"/g;
+
+  for (const match of html.matchAll(pattern)) {
+    const title = cleanText(match.groups?.title || "");
+    const link = match.groups?.link || source.url;
+
+    if (!title || !link) {
+      continue;
+    }
+
+    items.push(
+      buildSourceItem(source, {
+        id: `${source.id}-${slugify(link)}`,
+        title,
+        link,
+        publishedAt: normaliseLooseDate(match.groups?.date || ""),
+        excerpt: title,
+        categories: ["open catalyst", "catalyst"]
+      })
+    );
+  }
+
+  return items.slice(0, DEFAULT_SOURCE_LIMIT);
+}
+
+async function extractIsomorphicLabsNewsItems(html, source) {
+  const candidates = [];
+  const pattern =
+    /<a[^>]+href="(?<link>\/articles\/[^"]+)"[^>]*class="news-card[^"]*"[\s\S]*?<h3[^>]*>(?<title>[\s\S]*?)<\/h3>[\s\S]*?<div class="text-tag-s">(?<date>\d{2}\.\d{2}\.\d{4})<\/div>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    candidates.push({
+      link: match.groups?.link || "",
+      title: match.groups?.title || "",
+      publishedAt: match.groups?.date || "",
+      categories: ["drug discovery", "isomorphic labs"]
+    });
+  }
+
+  return enrichCandidatesWithPageMetadata(source, candidates, {
+    defaultCategories: ["drug discovery", "isomorphic labs"]
+  });
+}
+
+function extractCp2kNewsItems(html, source) {
+  const items = [];
+  const pattern =
+    /<h2[^>]*id="(?<id>[^"]+)"[^>]*>(?<title>[\s\S]*?)<\/h2>\s*<div class="level2">\s*<p>(?<excerpt>[\s\S]*?)<\/p>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    const title = cleanText(match.groups?.title || "");
+    const excerpt = cleanText(match.groups?.excerpt || "");
+    const dateText = title.match(/\(([^()]+\d{4})\)/)?.[1] || "";
+    const releaseLink =
+      excerpt.match(/href="(?<link>https:\/\/[^"]+)"/i)?.groups?.link ||
+      `https://www.cp2k.org/news#${match.groups?.id || ""}`;
+
+    if (!title) {
+      continue;
+    }
+
+    items.push(
+      buildSourceItem(source, {
+        id: `${source.id}-${slugify(releaseLink)}`,
+        title,
+        link: releaseLink,
+        publishedAt: normaliseLooseDate(dateText),
+        excerpt,
+        categories: ["cp2k", "release"]
+      })
+    );
+  }
+
+  return items.slice(0, DEFAULT_SOURCE_LIMIT);
+}
+
+function extractAseReleaseNotesItems(html, source) {
+  const items = [];
+  const pattern =
+    /<section id="(?<id>version-[^"]+)">[\s\S]*?<h2>(?<title>[\s\S]*?)<a class="headerlink"[\s\S]*?<\/h2>\s*<p>(?<date>[^:]+):\s*<a[^>]+href="(?<link>[^"]+)"[^>]*>[\s\S]*?<\/a><\/p>\s*<p>(?<excerpt>[\s\S]*?)<\/p>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    const title = cleanText(match.groups?.title || "");
+    const link = match.groups?.link || `https://wiki.fysik.dtu.dk/ase/releasenotes.html#${match.groups?.id || ""}`;
+
+    if (!title) {
+      continue;
+    }
+
+    items.push(
+      buildSourceItem(source, {
+        id: `${source.id}-${slugify(link)}`,
+        title,
+        link,
+        publishedAt: normaliseLooseDate(match.groups?.date || ""),
+        excerpt: cleanText(match.groups?.excerpt || ""),
+        categories: ["ase", "release notes"]
+      })
+    );
+  }
+
+  return items.slice(0, DEFAULT_SOURCE_LIMIT);
+}
+
+async function extractGoogleCloudComputeItems(html, source) {
+  const candidates = [];
+  const pattern =
+    /<a href="(?<link>https:\/\/cloud\.google\.com\/blog\/products\/compute\/[^"]+)" class="w7DBpd"[\s\S]*?<h5[^>]*>(?<title>[\s\S]*?)<\/h5>[\s\S]*?<p class="nRhiJb-cHYyed gh5m8">(?<excerpt>[\s\S]*?)<\/p>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    candidates.push({
+      link: match.groups?.link || "",
+      title: match.groups?.title || "",
+      excerpt: match.groups?.excerpt || "",
+      categories: ["google cloud", "compute"]
+    });
+  }
+
+  return enrichCandidatesWithPageMetadata(source, candidates, {
+    defaultCategories: ["google cloud", "compute"]
+  });
+}
+
+async function extractAmdAiBlogItems(html, source) {
+  const candidates = [];
+  const seen = new Set();
+
+  for (const match of html.matchAll(/https:\/\/www\.amd\.com\/en\/blogs\/\d{4}\/[^"]+\.html/g)) {
+    const link = match[0];
+    if (seen.has(link)) {
+      continue;
+    }
+
+    seen.add(link);
+    candidates.push({
+      link,
+      categories: ["amd", "accelerator"]
+    });
+  }
+
+  return enrichCandidatesWithPageMetadata(source, candidates, {
+    defaultCategories: ["amd", "accelerator"]
+  });
+}
+
+async function extractCerebrasBlogItems(html, source) {
+  const candidates = [];
+  const pattern =
+    /<a[^>]+href="(?<link>\/blog\/[^"]+)"[^>]*>[\s\S]*?<h3[^>]*>(?<title>[\s\S]*?)<\/h3><p[^>]*font-semibold uppercase font-mono[^>]*>(?<date>[\s\S]*?)<\/p>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    candidates.push({
+      link: match.groups?.link || "",
+      title: match.groups?.title || "",
+      publishedAt: match.groups?.date || "",
+      categories: ["cerebras", "inference"]
+    });
+  }
+
+  return enrichCandidatesWithPageMetadata(source, candidates, {
+    defaultCategories: ["cerebras", "inference"]
+  });
+}
+
+async function extractGroqNewsroomItems(html, source) {
+  const candidates = [];
+  const pattern =
+    /<article class="card u-link-reset"[\s\S]*?<time dateTime="(?<date>[^"]+)"[^>]*>[\s\S]*?<\/time>[\s\S]*?<h2[^>]*>\s*<a href="(?<link>\/newsroom\/[^"]+)">(?<title>[\s\S]*?)<\/a>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    candidates.push({
+      link: match.groups?.link || "",
+      title: match.groups?.title || "",
+      publishedAt: match.groups?.date || "",
+      categories: ["groq", "inference"]
+    });
+  }
+
+  return enrichCandidatesWithPageMetadata(source, candidates, {
+    defaultCategories: ["groq", "inference"]
+  });
+}
+
+async function extractNistMagneticsItems(html, source) {
+  const candidates = [];
+  const pattern =
+    /<a href="(?<link>\/news-events\/news\/\d{4}\/\d{2}\/[^"]+)">[\s\S]*?<h3><span[^>]*>(?<title>[\s\S]*?)<\/span>\s*<\/h3>[\s\S]*?<div[^>]*class="text-with-summary">(?<excerpt>[\s\S]*?)<\/div>/g;
+
+  for (const match of html.matchAll(pattern)) {
+    candidates.push({
+      link: match.groups?.link || "",
+      title: match.groups?.title || "",
+      excerpt: match.groups?.excerpt || "",
+      categories: ["magnetics", "nist"]
+    });
+  }
+
+  return enrichCandidatesWithPageMetadata(source, candidates, {
+    defaultCategories: ["magnetics", "nist"]
+  });
 }
 
 function extractFirstMatch(text, patterns = []) {
@@ -1868,3 +2902,5 @@ function shouldRetryFetch(error) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+
