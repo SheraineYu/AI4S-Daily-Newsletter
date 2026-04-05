@@ -1,125 +1,210 @@
-# AI4S Daily Digest
+# AI4S Daily Newsletter
 
-一个从零搭建的本地网页，用于汇总你关注领域的每日全球新闻、论文和研究链接：
+AI4S Daily Newsletter is a curated daily brief for frontier models, AI4S, atomistic simulation, hardware systems, and globally important developments. It combines a bilingual web interface, a card-based HTML email, and scheduled delivery through GitHub Actions.
 
-- Frontier foundation models / 全球大模型
-- AI4S / Scientific ML
-- LAMs / PFD / DFT / LAMMPS / ABACUS
-- Agents / Tool use
-- FPGA / ASIC / GNN / memory acceleration
-- Magnetic materials / magnetism / spintronics
+## What It Covers
 
-## 功能
+- Frontier model launches and official product updates
+- AI4S, scientific machine learning, and agent workflows
+- LAMs, PFD, DFT, LAMMPS, ABACUS, and atomistic computing
+- Hardware acceleration, memory systems, FPGA/ASIC, and systems shifts
+- Magnetic materials and related materials science signals
+- A global watchlist across finance, technology, politics, defense, and macro risk
 
-- 后端统一聚合多路 RSS / Atom 源。
-- 新闻源覆盖 OpenAI、Google AI Blog、NVIDIA、TechCrunch AI、VentureBeat AI、MarkTechPost，以及 ABACUS 开发更新流。
-- 论文与研究源使用 arXiv 最新 Atom 查询。
-- 页面会按研究主题分区展示，并生成邮件可直接使用的纯文本 / HTML 摘要。
-- 抓取具备容错逻辑，个别源失败不会拖垮整页。
+## Editorial Principles
 
-## 启动
+- Recent first: the default window is the last seven days, with stronger preference for the last 24 to 72 hours
+- High-signal selection: the pipeline favors official announcements, strong papers, major releases, benchmarks, performance/scaling milestones, and material method changes
+- Low-noise filtering: routine commits, minor version churn, generic marketing posts, and stale items are filtered out
+- Topic framing: each topic includes `importance`, `confidence`, `why-it-matters`, and `next-step` analysis before the link list
+
+## Product Surfaces
+
+### Web UI
+
+The web UI is designed as a readable publication page rather than an internal dashboard:
+
+- bilingual Chinese / English switch
+- topic cards with analysis blocks and link cards
+- curated overview panels for coverage, editorial policy, and delivery
+- clipboard actions for text email and HTML email
+
+### Email
+
+The generated email includes:
+
+- a styled hero section
+- topic-by-topic cards
+- HTML link cards instead of plain link dumps
+- plain-text fallback for clients that do not render HTML
+
+### Automation
+
+GitHub Actions is the production delivery path. It runs the digest daily and sends it through Gmail SMTP to the configured recipient.
+
+## Sources
+
+Current coverage mixes official feeds, high-quality media, arXiv, and a small set of specialized atomistic sources.
+
+Examples include:
+
+- OpenAI, Anthropic, Google AI, Google Developers / Gemma, Google DeepMind
+- Mistral, Meta Llama, xAI, Hugging Face official release streams
+- NVIDIA, The Verge, TechCrunch, VentureBeat, CNBC, NPR, POLITICO, WSJ, MarketWatch, Sky News, UN News, Defense News, Defense One
+- DeepModeling ABACUS news, official LAMMPS releases, Materials Project database versions, OQMD releases, Psi-k announcements
+- arXiv for paper discovery
+
+## Local Development
+
+### Requirements
+
+- Node.js 20+
+
+### Install
 
 ```bash
 npm install
+```
+
+### Run the web app
+
+```bash
 npm run dev
 ```
 
-默认地址：
+Open [http://localhost:3000](http://localhost:3000).
+
+### Generate the email payload
+
+```bash
+npm run digest:email
+```
+
+This prints JSON with:
+
+- `subject`
+- `plainText`
+- `html`
+
+### Send a real email locally
+
+```bash
+GMAIL_SMTP_USER="your@gmail.com" \
+GMAIL_SMTP_PASS="your-app-password" \
+DIGEST_TO_EMAIL="recipient@example.com" \
+npm run digest:send
+```
+
+### Dry run email send
+
+```bash
+GMAIL_SMTP_USER="your@gmail.com" \
+GMAIL_SMTP_PASS="your-app-password" \
+DIGEST_TO_EMAIL="recipient@example.com" \
+DIGEST_DRY_RUN=1 \
+npm run digest:send
+```
+
+## Environment Variables
+
+Required for real email sending:
+
+- `GMAIL_SMTP_USER`
+- `GMAIL_SMTP_PASS`
+- `DIGEST_TO_EMAIL`
+
+Optional:
+
+- `GMAIL_SMTP_HOST` defaults to `smtp.gmail.com`
+- `GMAIL_SMTP_PORT` defaults to `465`
+- `DIGEST_FROM_EMAIL` defaults to `GMAIL_SMTP_USER`
+- `DIGEST_LOCALE` set to `zh` or `en`
+
+## GitHub Actions
+
+The production workflow lives at `.github/workflows/daily-digest.yml`.
+
+It supports:
+
+- scheduled runs
+- manual runs with `workflow_dispatch`
+
+### Schedule
+
+The workflow uses:
 
 ```text
-http://localhost:3000
+0 0 * * *
+```
+
+GitHub Actions cron is UTC, so this maps to:
+
+- `UTC 00:00`
+- `Asia/Shanghai 08:00`
+
+### Required GitHub Secrets
+
+- `GMAIL_SMTP_USER`
+- `GMAIL_SMTP_PASS`
+
+Recommended:
+
+- `GMAIL_SMTP_HOST=smtp.gmail.com`
+- `GMAIL_SMTP_PORT=465`
+- `DIGEST_FROM_EMAIL`
+
+The target recipient can be set in workflow environment or repository configuration. The current production workflow is configured for `yusheraine@gmail.com`.
+
+## Gmail App Password
+
+`GMAIL_SMTP_PASS` must be a Gmail App Password, not the normal account password.
+
+Steps:
+
+1. Enable 2-Step Verification on the Google account
+2. Open [Google App Passwords](https://myaccount.google.com/apppasswords)
+3. Create a new app password for Mail
+4. Store the generated 16-character password in the GitHub Actions secret `GMAIL_SMTP_PASS`
+
+## Project Structure
+
+```text
+public/
+  index.html          Web UI shell
+  app.js              Client-side rendering and locale switching
+  styles.css          Visual design
+
+scripts/
+  generate-email.mjs  Build subject / text / html payload
+  send-email.mjs      Send the email over Gmail SMTP
+
+src/
+  config/topics.js    Topics, source metadata, editorial hints
+  lib/digest.js       Fetching, filtering, ranking, rendering
+
+server.js             Express server and API routes
 ```
 
 ## API
 
 - `GET /api/digest`
-  返回网页展示所需的聚合数据。
+  Returns the structured digest for the web UI.
+
 - `GET /api/digest?refresh=1`
-  强制刷新，绕过 15 分钟缓存。
+  Forces a fresh rebuild instead of using cache.
+
 - `GET /api/digest/email`
-  返回可直接用于邮件发送的 `plainText` 和 `html` 内容。
+  Returns the generated email payload.
 
-也可以直接在命令行生成邮件内容：
+- `GET /api/digest/email?locale=en`
+  Returns the English email payload.
 
-```bash
-npm run digest:email
-```
+## Positioning
 
-## 后续接入每日邮件
+This project is intentionally opinionated:
 
-这个项目已经把“邮件正文生成”准备好了。要做到真正的每日发送，需要再接一个调度器或自动化执行层，例如：
+- it is not a generic RSS reader
+- it is not a commit firehose
+- it is not a long-form knowledge base
 
-- Codex automation 每天定时抓取并通过 Gmail 插件发送
-- GitHub Actions / cron job 定时请求 `/api/digest/email`
-- 自己的 Node 定时任务结合 Gmail API 或 SMTP
-
-当前这一步先把聚合和展示层做好，方便你后续直接接发送链路。
-
-## GitHub Actions 每日自动邮件
-
-已新增生产可用的自动化工作流：`.github/workflows/daily-digest.yml`。
-
-- 触发方式：
-  - `schedule`（每天 UTC `0 0 * * *`）
-  - `workflow_dispatch`（手动触发）
-- 时区说明：`0 0 * * *` 是 **UTC 00:00**，对应 **Asia/Shanghai 08:00**。
-- 工作流步骤：
-  1. checkout 仓库
-  2. setup Node.js 22
-  3. `npm ci`
-  4. `npm run digest:send`
-
-### 邮件发送实现（Gmail SMTP）
-
-新增脚本：`scripts/send-email.mjs`，基于 Gmail SMTP（Node 原生实现）发送邮件，不依赖 Codex 插件。
-
-- 先调用 `scripts/generate-email.mjs` 生成 JSON（subject/plainText/html）
-- 发送 HTML 正文，并附带纯文本 fallback
-- 缺失必需环境变量时会明确报错退出
-
-支持环境变量：
-
-- `GMAIL_SMTP_HOST`（可选，默认 `smtp.gmail.com`）
-- `GMAIL_SMTP_PORT`（可选，默认 `465`）
-- `GMAIL_SMTP_USER`（必需）
-- `GMAIL_SMTP_PASS`（必需）
-- `DIGEST_TO_EMAIL`（必需）
-- `DIGEST_FROM_EMAIL`（可选，默认等于 `GMAIL_SMTP_USER`）
-
-### GitHub Secrets 配置
-
-在仓库 **Settings → Secrets and variables → Actions** 中添加：
-
-- `GMAIL_SMTP_HOST`（建议填 `smtp.gmail.com`）
-- `GMAIL_SMTP_PORT`（建议填 `465`）
-- `GMAIL_SMTP_USER`（你的 Gmail 地址）
-- `GMAIL_SMTP_PASS`（Gmail App Password）
-- `DIGEST_FROM_EMAIL`（可选，不填则默认 `GMAIL_SMTP_USER`）
-
-> 说明：收件人已在 workflow 中固定为 `DIGEST_TO_EMAIL=yusheraine@gmail.com`。
-
-### Gmail App Password 获取
-
-Gmail SMTP 推荐使用 App Password：
-
-1. 为 Google 账号开启 2-Step Verification。
-2. 在 Google 账号安全设置中创建 App Password。
-3. 将 16 位密码写入 `GMAIL_SMTP_PASS` secret。
-
-### 手动测试
-
-本地：
-
-```bash
-npm ci
-npm run digest:email
-node scripts/send-email.mjs --dry-run
-```
-
-- `--dry-run` 不发信，只输出收件人、主题、正文长度。
-
-GitHub Actions：
-
-1. 打开仓库 **Actions** 页面。
-2. 选择 **Daily AI4S Digest Email**。
-3. 点击 **Run workflow** 手动执行一次，验证 secrets 与发信链路。
+It is a compact, high-signal publication layer for daily monitoring and fast decision support.

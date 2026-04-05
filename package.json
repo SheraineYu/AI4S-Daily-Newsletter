@@ -1,7 +1,7 @@
 {
   "name": "ai4s-newsletter",
   "version": "1.0.0",
-  "description": "Daily digest dashboard for AI4S, frontier models, agents, atomistic simulation, hardware acceleration, and materials research.",
+  "description": "Curated daily newsletter for AI4S, frontier models, atomistic simulation, hardware systems, and global high-signal monitoring.",
   "type": "module",
   "main": "server.js",
   "scripts": {

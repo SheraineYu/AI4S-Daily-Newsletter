@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI4S Daily Intelligence Deck</title>
+    <title>AI4S Daily Newsletter</title>
+    <meta
+      name="description"
+      content="AI4S Daily Newsletter delivers a curated brief across frontier models, AI4S research, atomistic simulation, hardware systems, and globally important signals."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,70 +20,104 @@
     <div class="page-shell">
       <header class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Daily research monitoring</p>
-          <h1>AI4S Daily Intelligence Deck</h1>
-          <p class="hero-text">
-            A compact briefing hub for AI4S, frontier models, agents, atomistic
-            simulation, hardware systems, and globally important news signals.
-            The backend aggregates live news feeds, arXiv papers, and software
-            updates, then turns them into a web view and daily email digest.
+          <div class="hero-topbar">
+            <p id="heroEyebrow" class="eyebrow">Curated daily brief</p>
+            <div class="locale-toggle" role="group" aria-label="Language switch">
+              <button type="button" class="locale-toggle__button" data-locale="zh">中文</button>
+              <button type="button" class="locale-toggle__button" data-locale="en">EN</button>
+            </div>
+          </div>
+          <h1 id="heroTitle">AI4S Daily Newsletter</h1>
+          <p id="heroText" class="hero-text">
+            A publication-style daily brief for frontier models, AI4S, atomistic
+            simulation, hardware systems, and high-impact global developments.
           </p>
           <div class="hero-actions">
-            <button id="refreshButton" class="button primary">Refresh digest</button>
-            <button id="copyMailButton" class="button secondary">Copy plain email</button>
+            <button id="refreshButton" class="button primary">Refresh brief</button>
+            <button id="copyMailButton" class="button secondary">Copy text email</button>
             <button id="copyHtmlButton" class="button ghost">Copy HTML email</button>
           </div>
         </div>
 
         <aside class="status-panel">
           <div class="status-row">
-            <span>Last updated</span>
+            <span id="lastUpdatedLabel">Last updated</span>
             <strong id="generatedAt">Loading...</strong>
           </div>
 
           <div class="status-grid">
             <div>
-              <span>Topics</span>
+              <span id="topicsLabel">Topics</span>
               <strong id="topicCount">0</strong>
             </div>
             <div>
-              <span>News</span>
+              <span id="newsLabel">News</span>
               <strong id="newsCount">0</strong>
             </div>
             <div>
-              <span>Papers</span>
+              <span id="papersLabel">Papers</span>
               <strong id="paperCount">0</strong>
             </div>
             <div>
-              <span>Feeds</span>
+              <span id="feedsLabel">Sources</span>
               <strong id="sourceCount">0</strong>
             </div>
           </div>
 
           <div class="signal-strip">
             <div>
-              <span class="signal-strip__label">Mode</span>
-              <strong>Research + Risk Scan</strong>
+              <span id="modeLabel" class="signal-strip__label">Editorial mode</span>
+              <strong id="modeValue">High-signal curation</strong>
             </div>
             <div>
-              <span class="signal-strip__label">Delivery</span>
-              <strong>Web + Daily Email</strong>
+              <span id="deliveryLabel" class="signal-strip__label">Delivery</span>
+              <strong id="deliveryValue">Web and daily email</strong>
             </div>
           </div>
 
-          <p class="status-note">
-            Failed sources are isolated instead of breaking the full digest, so
-            the dashboard remains usable even when part of the feed graph times
-            out.
+          <p id="statusNote" class="status-note">
+            Official sources, recent papers, and high-impact updates are ranked together.
+            Routine commits and stale items are filtered out.
           </p>
         </aside>
       </header>
 
       <main>
+        <section class="briefing-panels" aria-label="Newsletter overview">
+          <article class="briefing-panel">
+            <div class="briefing-panel__eyebrow" id="coverageEyebrow">Coverage</div>
+            <h2 id="coverageTitle">A single brief across seven domains</h2>
+            <p id="coverageText">
+              Frontier model releases, AI4S papers, atomistic methods, hardware shifts,
+              and global macro events are tracked in one place.
+            </p>
+            <ul id="coverageList" class="briefing-list"></ul>
+          </article>
+
+          <article class="briefing-panel">
+            <div class="briefing-panel__eyebrow" id="principlesEyebrow">Editorial principles</div>
+            <h2 id="principlesTitle">Recent, high-signal, decision-oriented</h2>
+            <p id="principlesText">
+              The brief favors the last seven days, official announcements, strong research
+              signals, and material changes worth acting on.
+            </p>
+            <ul id="principlesList" class="briefing-list"></ul>
+          </article>
+
+          <article class="briefing-panel">
+            <div class="briefing-panel__eyebrow" id="deliveryEyebrow">Delivery</div>
+            <h2 id="deliveryTitle">Readable on the web, ready for inbox delivery</h2>
+            <p id="deliveryText">
+              The same digest powers the web UI, a styled HTML email, and daily GitHub Actions delivery.
+            </p>
+            <ul id="deliveryList" class="briefing-list"></ul>
+          </article>
+        </section>
+
         <section class="section-head">
           <div>
-            <p class="eyebrow">Monitored scope</p>
-            <h2>Today's intelligence map</h2>
+            <p id="scopeEyebrow" class="eyebrow">Today&apos;s brief</p>
+            <h2 id="scopeTitle">Current coverage by topic</h2>
           </div>
           <div id="toast" class="toast" aria-live="polite"></div>
         </section>
@@ -89,8 +127,8 @@
         <section id="failuresSection" class="failures hidden">
           <div class="section-head compact">
             <div>
-              <p class="eyebrow">Attention</p>
-              <h2>Unavailable sources</h2>
+              <p id="failuresEyebrow" class="eyebrow">Source status</p>
+              <h2 id="failuresTitle">Unavailable sources</h2>
             </div>
           </div>
           <ul id="failuresList" class="failure-list"></ul>
@@ -114,21 +152,29 @@
 
         <p class="topic-description"></p>
 
-        <section class="topic-briefing">
-          <div class="briefing-summary">
-            <span class="briefing-label">Signal</span>
-            <p class="briefing-summary-text"></p>
-          </div>
-
-          <div class="briefing-grid">
-            <article class="briefing-panel briefing-panel--warning">
-              <span class="briefing-label">Warning</span>
-              <p class="briefing-warning-text"></p>
+        <section class="topic-analysis">
+          <div class="analysis-grid">
+            <article class="analysis-card analysis-card--importance">
+              <span class="analysis-card__label analysis-importance-label"></span>
+              <strong class="analysis-card__headline analysis-importance-headline"></strong>
+              <p class="analysis-card__text analysis-importance-text"></p>
             </article>
 
-            <article class="briefing-panel briefing-panel--ideas">
-              <span class="briefing-label">Ideas</span>
-              <ul class="briefing-ideas-list"></ul>
+            <article class="analysis-card analysis-card--confidence">
+              <span class="analysis-card__label analysis-confidence-label"></span>
+              <strong class="analysis-card__headline analysis-confidence-headline"></strong>
+              <p class="analysis-card__text analysis-confidence-text"></p>
+            </article>
+
+            <article class="analysis-card analysis-card--why">
+              <span class="analysis-card__label analysis-why-label"></span>
+              <p class="analysis-card__text analysis-why-text"></p>
+            </article>
+
+            <article class="analysis-card analysis-card--next">
+              <span class="analysis-card__label analysis-next-label"></span>
+              <p class="analysis-card__text analysis-next-text"></p>
+              <ul class="analysis-next-actions"></ul>
             </article>
           </div>
         </section>
@@ -136,16 +182,16 @@
         <div class="topic-columns">
           <section class="topic-section topic-news-section">
             <div class="subhead">
-              <h4>News</h4>
-              <span class="subnote">latest updates</span>
+              <h4 class="topic-news-title">News</h4>
+              <span class="subnote topic-news-subnote">latest updates</span>
             </div>
             <div class="topic-news-list item-list"></div>
           </section>
 
           <section class="topic-section topic-paper-section">
             <div class="subhead">
-              <h4>Papers</h4>
-              <span class="subnote">latest research</span>
+              <h4 class="topic-paper-title">Papers</h4>
+              <span class="subnote topic-paper-subnote">latest research</span>
             </div>
             <div class="topic-paper-list item-list"></div>
           </section>
@@ -155,10 +201,13 @@
 
     <template id="itemTemplate">
       <a class="digest-item" target="_blank" rel="noreferrer noopener">
-        <span class="digest-item__meta"></span>
+        <div class="digest-item__meta">
+          <span class="digest-item__source"></span>
+          <span class="digest-item__date"></span>
+        </div>
         <strong class="digest-item__title"></strong>
         <p class="digest-item__excerpt"></p>
-        <span class="digest-item__cta">Open link</span>
+        <span class="digest-item__cta"></span>
       </a>
     </template>
 

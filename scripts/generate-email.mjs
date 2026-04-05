@@ -1,18 +1,22 @@
 import {
   buildDigest,
+  formatDigestDateKey,
   renderHtmlDigest,
   renderPlaintextDigest
 } from "../src/lib/digest.js";
 import { pathToFileURL } from "node:url";
 
-export async function generateEmailPayload({ force = true } = {}) {
+export async function generateEmailPayload({
+  force = true,
+  locale = process.env.DIGEST_LOCALE === "en" ? "en" : "zh"
+} = {}) {
   const digest = await buildDigest({ force });
 
   return {
     generatedAt: digest.generatedAt,
-    subject: `AI4S Daily Digest - ${digest.generatedAt.slice(0, 10)}`,
-    plainText: renderPlaintextDigest(digest),
-    html: renderHtmlDigest(digest)
+    subject: `AI4S Daily Newsletter | ${formatDigestDateKey(digest.generatedAt)}`,
+    plainText: renderPlaintextDigest(digest, { locale }),
+    html: renderHtmlDigest(digest, { locale })
   };
 }
 
