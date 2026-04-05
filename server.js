@@ -8,8 +8,17 @@ import {
 
 const app = express();
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || "0.0.0.0";
 
 app.use(express.static("public"));
+
+app.get("/healthz", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "ai4s-daily-newsletter",
+    uptimeSeconds: Math.round(process.uptime())
+  });
+});
 
 app.get("/api/digest", async (req, res) => {
   try {
@@ -41,6 +50,6 @@ app.get("/api/digest/email", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`AI4S Daily Newsletter is running at http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`AI4S Daily Newsletter is running at http://${host}:${port}`);
 });

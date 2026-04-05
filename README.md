@@ -75,6 +75,19 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### Production start
+
+```bash
+npm start
+```
+
+The production server exposes:
+
+- `/` for the web UI
+- `/api/digest` for the structured digest payload
+- `/api/digest/email` for the generated email payload
+- `/healthz` for health checks
+
 ### Generate the email payload
 
 ```bash
@@ -199,6 +212,51 @@ Each topic entry should include:
 - `actionsZh`
 
 `hybrid` mode is the recommended default: if the local analysis file is missing, stale, or invalid, the digest still renders using template analysis instead of failing.
+
+## Deploy on Render
+
+This repository includes [render.yaml](render.yaml), so Render can import it as a Blueprint with the expected build, start, and health-check settings.
+
+Recommended split:
+
+- use Render for the public web application
+- keep scheduled email sending in GitHub Actions
+
+That keeps the web UI online without moving SMTP delivery into the hosted web process.
+
+### Render deployment steps
+
+1. Push the branch you want to deploy to GitHub.
+2. In Render, choose **New +** -> **Blueprint**.
+3. Select the `SheraineYu/AI4S-Daily-Newsletter` repository.
+4. Review the detected `render.yaml` configuration.
+5. Create the web service and wait for the first build to finish.
+
+### Blueprint defaults
+
+The included Blueprint config uses:
+
+- `plan: free`
+- `buildCommand: npm ci`
+- `startCommand: npm start`
+- `healthCheckPath: /healthz`
+- `NODE_VERSION=22`
+- `TZ=Asia/Shanghai`
+- `DIGEST_ANALYSIS_MODE=template`
+
+### Optional Render environment variables
+
+The site can run without SMTP credentials.
+
+Only add these if you want a different analysis mode on the hosted site:
+
+- `DIGEST_ANALYSIS_MODE`
+- `REMOTE_ANALYSIS_API_KEY`
+- `REMOTE_ANALYSIS_MODEL`
+- `REMOTE_ANALYSIS_BASE_URL`
+- `REMOTE_ANALYSIS_TIMEOUT_MS`
+
+If you keep the default `template` mode, the public site works without extra secrets.
 
 ## GitHub Actions
 
