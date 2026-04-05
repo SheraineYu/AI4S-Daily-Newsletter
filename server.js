@@ -1,4 +1,6 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildDigest,
   formatDigestDateKey,
@@ -6,12 +8,20 @@ import {
   renderPlaintextDigest
 } from "./src/lib/digest.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicDir = path.join(__dirname, "public");
+
 const app = express();
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0";
 const displayHost = host === "0.0.0.0" ? "localhost" : host;
 
-app.use(express.static("public"));
+app.use(express.static(publicDir));
+
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
 
 app.get("/healthz", (_req, res) => {
   res.json({
