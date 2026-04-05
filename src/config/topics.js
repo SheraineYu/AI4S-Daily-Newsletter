@@ -161,9 +161,7 @@ export const NEWS_SOURCES = [
   {
     id: "google-cloud-compute",
     label: "Google Cloud Compute",
-    url: "https://cloud.google.com/blog/products/compute",
-    kind: "html-news",
-    extractor: "google-cloud-compute",
+    url: "https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/rss/",
     type: "news",
     official: true,
     priority: 4
@@ -186,10 +184,8 @@ export const NEWS_SOURCES = [
   },
   {
     id: "amd-ai-blogs",
-    label: "AMD Blogs",
-    url: "https://www.amd.com/en/blogs.html",
-    kind: "html-news",
-    extractor: "amd-ai-blogs",
+    label: "AMD Press Releases",
+    url: "https://ir.amd.com/news-events/press-releases/rss",
     type: "news",
     official: true,
     priority: 4
