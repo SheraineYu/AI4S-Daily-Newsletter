@@ -70,9 +70,54 @@ export const NEWS_SOURCES = [
     priority: 4
   },
   {
+    id: "microsoft-mattergen-releases",
+    label: "Microsoft MatterGen Releases",
+    url: "https://github.com/microsoft/mattergen/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 5
+  },
+  {
+    id: "microsoft-mattersim-releases",
+    label: "Microsoft MatterSim Releases",
+    url: "https://github.com/microsoft/mattersim/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 5
+  },
+  {
+    id: "microsoft-ai2bmd-releases",
+    label: "Microsoft AI2BMD Releases",
+    url: "https://github.com/microsoft/AI2BMD/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
+    id: "nvidia-bionemo-framework-releases",
+    label: "NVIDIA BioNeMo Framework Releases",
+    url: "https://github.com/NVIDIA/bionemo-framework/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
+    id: "deepspeed-releases",
+    label: "DeepSpeed Releases",
+    url: "https://github.com/deepspeedai/DeepSpeed/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
     id: "mistral-news",
     label: "Mistral AI Releases",
-    url: "https://api.github.com/repos/mistralai/client-python/releases?per_page=8",
+    url: "https://github.com/mistralai/client-python/releases.atom",
     kind: "github-releases",
     type: "news",
     official: true,
@@ -81,7 +126,7 @@ export const NEWS_SOURCES = [
   {
     id: "meta-llama-releases",
     label: "Meta Llama Releases",
-    url: "https://api.github.com/repos/meta-llama/llama-models/releases?per_page=8",
+    url: "https://github.com/meta-llama/llama-models/releases.atom",
     kind: "github-releases",
     type: "news",
     official: true,
@@ -90,7 +135,7 @@ export const NEWS_SOURCES = [
   {
     id: "xai-sdk-releases",
     label: "xAI SDK Releases",
-    url: "https://api.github.com/repos/xai-org/xai-sdk-python/releases?per_page=8",
+    url: "https://github.com/xai-org/xai-sdk-python/releases.atom",
     kind: "github-releases",
     type: "news",
     official: true,
@@ -99,7 +144,7 @@ export const NEWS_SOURCES = [
   {
     id: "huggingface-transformers-releases",
     label: "Hugging Face Transformers Releases",
-    url: "https://api.github.com/repos/huggingface/transformers/releases?per_page=8",
+    url: "https://github.com/huggingface/transformers/releases.atom",
     kind: "github-releases",
     type: "news",
     official: true,
@@ -116,9 +161,7 @@ export const NEWS_SOURCES = [
   {
     id: "google-cloud-compute",
     label: "Google Cloud Compute",
-    url: "https://cloud.google.com/blog/products/compute",
-    kind: "html-news",
-    extractor: "google-cloud-compute",
+    url: "https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/rss/",
     type: "news",
     official: true,
     priority: 4
@@ -141,10 +184,8 @@ export const NEWS_SOURCES = [
   },
   {
     id: "amd-ai-blogs",
-    label: "AMD Blogs",
-    url: "https://www.amd.com/en/blogs.html",
-    kind: "html-news",
-    extractor: "amd-ai-blogs",
+    label: "AMD Press Releases",
+    url: "https://ir.amd.com/news-events/press-releases/rss",
     type: "news",
     official: true,
     priority: 4
@@ -165,6 +206,24 @@ export const NEWS_SOURCES = [
     url: "https://groq.com/newsroom",
     kind: "html-news",
     extractor: "groq-newsroom",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
+    id: "aws-neuron-sdk-releases",
+    label: "AWS Neuron SDK Releases",
+    url: "https://github.com/aws-neuron/aws-neuron-sdk/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
+    id: "rocm-releases",
+    label: "ROCm Releases",
+    url: "https://github.com/ROCm/ROCm/releases.atom",
+    kind: "github-releases",
     type: "news",
     official: true,
     priority: 4
@@ -391,6 +450,33 @@ export const NEWS_SOURCES = [
     type: "news",
     official: true,
     priority: 3
+  },
+  {
+    id: "deepmd-kit-releases",
+    label: "DeePMD-kit Releases",
+    url: "https://github.com/deepmodeling/deepmd-kit/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
+    id: "pymatgen-releases",
+    label: "pymatgen Releases",
+    url: "https://github.com/materialsproject/pymatgen/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
+  },
+  {
+    id: "matgl-releases",
+    label: "matgl Releases",
+    url: "https://github.com/materialyzeai/matgl/releases.atom",
+    kind: "github-releases",
+    type: "news",
+    official: true,
+    priority: 4
   },
   {
     id: "nature-spintronics",
@@ -631,13 +717,20 @@ export const TOPICS = [
     whyItMattersBaseZh:
       "这个专题是通用模型进展与自身科研发现流程之间最直接的桥梁。",
     accent: "#289d8f",
+    maxItemsPerSource: 1,
     sourceIds: [
       "microsoft-research-feed",
       "open-catalyst-project",
       "isomorphic-labs-news",
       "deepmind-blog",
       "google-ai-blog",
-      "nvidia-blog"
+      "nvidia-blog",
+      "aws-machine-learning",
+      "microsoft-mattergen-releases",
+      "microsoft-mattersim-releases",
+      "microsoft-ai2bmd-releases",
+      "nvidia-bionemo-framework-releases",
+      "deepspeed-releases"
     ],
     newsKeywords: [
       "ai4science",
@@ -650,12 +743,21 @@ export const TOPICS = [
       "scientific foundation model",
       "mattergen",
       "mattersim",
+      "ai2bmd",
       "deepspeed4science",
+      "deepspeed",
       "open catalyst",
       "electrocatalysis",
       "bionemo",
       "biomolecular",
+      "protein",
       "protein design",
+      "genomics",
+      "chemistry",
+      "weather",
+      "climate",
+      "seismic",
+      "scientific workflow",
       "isomorphic labs"
     ],
     paperKeywords: [
@@ -721,7 +823,10 @@ export const TOPICS = [
       "materials-project-db-versions",
       "oqmd-database-releases",
       "psi-k-announcements",
-      "open-catalyst-project"
+      "open-catalyst-project",
+      "deepmd-kit-releases",
+      "pymatgen-releases",
+      "matgl-releases"
     ],
     maxItemsPerSource: 1,
     maxSoftwareItems: 0,
@@ -733,8 +838,12 @@ export const TOPICS = [
       "quantum espresso",
       "ase",
       "abacus",
+      "deepmd",
+      "deepmd-kit",
+      "deeppot",
       "open catalyst",
       "materials project",
+      "matgl",
       "pymatgen",
       "oqmd",
       "atomistic",
@@ -747,6 +856,8 @@ export const TOPICS = [
       "release",
       "database version",
       "release notes",
+      "checkpoint",
+      "pretrained model",
       "pretraining",
       "fine-tuning",
       "distillation"
@@ -886,7 +997,9 @@ export const TOPICS = [
       "intel-ai-news",
       "amd-ai-blogs",
       "cerebras-blog",
-      "groq-newsroom"
+      "groq-newsroom",
+      "aws-neuron-sdk-releases",
+      "rocm-releases"
     ],
     newsKeywords: [
       "fpga",
@@ -897,17 +1010,26 @@ export const TOPICS = [
       "hbm",
       "chip",
       "tpu",
+      "neuron",
       "trainium",
       "inferentia",
       "gaudi",
       "rocm",
+      "mi300",
+      "mi350",
       "wafer-scale",
+      "hyperpod",
+      "cluster",
+      "distributed training",
+      "runtime",
+      "supercomputer",
       "serving",
       "compiler",
       "kernel",
       "latency",
       "throughput",
       "rack-scale",
+      "scale-out",
       "inference hardware",
       "training hardware",
       "interconnect"

@@ -9,6 +9,7 @@ import {
 const app = express();
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || "0.0.0.0";
+const displayHost = host === "0.0.0.0" ? "localhost" : host;
 
 app.use(express.static("public"));
 
@@ -51,5 +52,5 @@ app.get("/api/digest/email", async (req, res) => {
 });
 
 app.listen(port, host, () => {
-  console.log(`AI4S Daily Newsletter is running at http://${host}:${port}`);
+  console.log(`AI4S Daily Newsletter is running at http://${displayHost}:${port}`);
 });

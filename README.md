@@ -228,7 +228,7 @@ That keeps the web UI online without moving SMTP delivery into the hosted web pr
 
 1. Push the branch you want to deploy to GitHub.
 2. In Render, choose **New +** -> **Blueprint**.
-3. Select the `SheraineYu/AI4S-Daily-Newsletter` repository.
+3. Select the repository you want to deploy.
 4. Review the detected `render.yaml` configuration.
 5. Create the web service and wait for the first build to finish.
 
@@ -285,6 +285,10 @@ GitHub Actions cron is UTC, so this maps to:
 - `GMAIL_SMTP_USER`
 - `GMAIL_SMTP_PASS`
 
+### Required GitHub Variables
+
+- `DIGEST_TO_EMAIL`
+
 Recommended:
 
 - `GMAIL_SMTP_HOST=smtp.gmail.com`
@@ -294,7 +298,7 @@ Recommended:
 - `REMOTE_ANALYSIS_MODEL`
 - `REMOTE_ANALYSIS_BASE_URL`
 
-The target recipient can be set in workflow environment or repository configuration. The current production workflow is configured for `yusheraine@gmail.com`.
+The target recipient is configured through the repository variable `DIGEST_TO_EMAIL`.
 
 ## Gmail App Password
 
