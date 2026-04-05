@@ -238,8 +238,9 @@ Recommended Vercel setup:
 
 Recommended environment variables for the hosted site:
 
-- `TZ=Asia/Shanghai`
-- keep `DIGEST_ANALYSIS_MODE=template` unless you intentionally want remote analysis on the public site
+- none are required for the default deployment
+- do not add `TZ` on Vercel; that name is reserved
+- keep the hosted site on the default template-based behavior unless you intentionally want remote analysis on the public site
 
 The hosted Vercel site is best used for the public web experience. Scheduled email delivery should remain in GitHub Actions.
 
