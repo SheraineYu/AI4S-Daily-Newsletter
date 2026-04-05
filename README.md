@@ -1,56 +1,105 @@
-# AI4S Daily Digest
+# AI4S Daily Newsletter
 
-一个从零搭建的本地网页，用于汇总你关注领域的每日全球新闻、论文和研究链接：
+AI4S Daily Newsletter is a lightweight web digest for frontier models, AI4S, atomistic simulation, hardware acceleration, agents, and materials research. The same codebase supports:
 
-- Frontier foundation models / 全球大模型
-- AI4S / Scientific ML
-- LAMs / PFD / DFT / LAMMPS / ABACUS
-- Agents / Tool use
-- FPGA / ASIC / GNN / memory acceleration
-- Magnetic materials / magnetism / spintronics
+- local development with Express
+- static web delivery through the `public/` site
+- serverless API deployment on Vercel
+- digest email generation from the command line
 
-## 功能
+## Coverage
 
-- 后端统一聚合多路 RSS / Atom 源。
-- 新闻源覆盖 OpenAI、Google AI Blog、NVIDIA、TechCrunch AI、VentureBeat AI、MarkTechPost，以及 ABACUS 开发更新流。
-- 论文与研究源使用 arXiv 最新 Atom 查询。
-- 页面会按研究主题分区展示，并生成邮件可直接使用的纯文本 / HTML 摘要。
-- 抓取具备容错逻辑，个别源失败不会拖垮整页。
+- Frontier foundation models
+- AI4S and scientific machine learning
+- LAMs, PFD, DFT, LAMMPS, and ABACUS
+- Agents and tool use
+- FPGA, ASIC, GNN, and memory acceleration
+- Magnetic materials and related research
 
-## 启动
+## Local Development
+
+### Requirements
+
+- Node.js `22.x`
+
+### Install
 
 ```bash
 npm install
+```
+
+### Start the web app
+
+```bash
 npm run dev
 ```
 
-默认地址：
+Then open [http://localhost:3000](http://localhost:3000).
 
-```text
-http://localhost:3000
-```
-
-## API
-
-- `GET /api/digest`
-  返回网页展示所需的聚合数据。
-- `GET /api/digest?refresh=1`
-  强制刷新，绕过 15 分钟缓存。
-- `GET /api/digest/email`
-  返回可直接用于邮件发送的 `plainText` 和 `html` 内容。
-
-也可以直接在命令行生成邮件内容：
+### Generate the email payload
 
 ```bash
 npm run digest:email
 ```
 
-## 后续接入每日邮件
+This prints a JSON object with:
 
-这个项目已经把“邮件正文生成”准备好了。要做到真正的每日发送，需要再接一个调度器或自动化执行层，例如：
+- `subject`
+- `plainText`
+- `html`
 
-- Codex automation 每天定时抓取并通过 Gmail 插件发送
-- GitHub Actions / cron job 定时请求 `/api/digest/email`
-- 自己的 Node 定时任务结合 Gmail API 或 SMTP
+## API
 
-当前这一步先把聚合和展示层做好，方便你后续直接接发送链路。
+Local Express and Vercel expose the same API surface:
+
+- `GET /api/digest`
+- `GET /api/digest?refresh=1`
+- `GET /api/digest/email`
+- `GET /healthz`
+
+## Deploy on Vercel
+
+This repository is structured for Vercel deployment:
+
+- `public/` is served as the website
+- `api/digest/index.js` serves `/api/digest`
+- `api/digest/email.js` serves `/api/digest/email`
+- `api/healthz.js` serves `/healthz` through a rewrite in [vercel.json](vercel.json)
+
+### Vercel Steps
+
+1. Push the repository to GitHub.
+2. Sign in to Vercel and import the repository.
+3. Keep the default root directory as the repository root.
+4. Deploy with the existing project settings.
+
+The repo already includes:
+
+- [vercel.json](vercel.json)
+- a pinned Node runtime in [package.json](package.json)
+- local and hosted-compatible handlers for the digest APIs
+
+### Recommended Environment Variables
+
+These are optional for the current template-based digest:
+
+- `TZ=Asia/Shanghai`
+
+If you later extend the project with remote analysis or SMTP sending, add those variables in Vercel project settings instead of committing them into the repo.
+
+## Project Structure
+
+```text
+public/               Web UI assets
+api/                  Vercel serverless API routes
+scripts/              Local utility scripts
+src/config/           Topic and source configuration
+src/lib/digest.js     Aggregation, formatting, and rendering logic
+server.js             Local Express server for development
+vercel.json           Vercel deployment settings
+```
+
+## Notes
+
+- Vercel is used for hosting the web experience.
+- If you want scheduled email delivery, keep that in a separate automation layer such as GitHub Actions or another scheduler.

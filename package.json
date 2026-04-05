@@ -10,7 +10,7 @@
     "digest:email": "node scripts/generate-email.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "express": "^5.1.0",
