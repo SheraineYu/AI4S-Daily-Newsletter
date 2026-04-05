@@ -1,10 +1,24 @@
 import express from "express";
-import { buildDigest, renderHtmlDigest, renderPlaintextDigest } from "./src/lib/digest.js";
+import {
+  buildDigest,
+  formatDigestDateKey,
+  renderHtmlDigest,
+  renderPlaintextDigest
+} from "./src/lib/digest.js";
 
 const app = express();
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || "0.0.0.0";
 
 app.use(express.static("public"));
+
+app.get("/healthz", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "ai4s-daily-newsletter",
+    uptimeSeconds: Math.round(process.uptime())
+  });
+});
 
 app.get("/api/digest", async (req, res) => {
   try {
@@ -20,12 +34,13 @@ app.get("/api/digest", async (req, res) => {
 
 app.get("/api/digest/email", async (req, res) => {
   try {
+    const locale = req.query.locale === "en" ? "en" : "zh";
     const payload = await buildDigest({ force: req.query.refresh === "1" });
     res.json({
       generatedAt: payload.generatedAt,
-      subject: `AI4S Daily Digest - ${payload.generatedAt.slice(0, 10)}`,
-      plainText: renderPlaintextDigest(payload),
-      html: renderHtmlDigest(payload)
+      subject: `AI4S Daily Newsletter | ${formatDigestDateKey(payload.generatedAt)}`,
+      plainText: renderPlaintextDigest(payload, { locale }),
+      html: renderHtmlDigest(payload, { locale })
     });
   } catch (error) {
     res.status(500).json({
@@ -35,6 +50,6 @@ app.get("/api/digest/email", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`AI4S digest server is running at http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`AI4S Daily Newsletter is running at http://${host}:${port}`);
 });
