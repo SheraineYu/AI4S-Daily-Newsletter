@@ -2,6 +2,12 @@
 
 AI4S Daily Newsletter is a curated daily brief for frontier models, AI4S, atomistic simulation, hardware systems, and globally important developments. It combines a bilingual web interface, a card-based HTML email, and scheduled delivery through GitHub Actions.
 
+## Preview
+
+![AI4S Daily Newsletter web UI](docs/images/web-home.png)
+
+The web experience is built as a readable daily publication, with bilingual topic cards, high-signal framing, and a matching email surface.
+
 ## What It Covers
 
 - Frontier model launches and official product updates
