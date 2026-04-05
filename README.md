@@ -6,7 +6,7 @@ AI4S Daily Newsletter is a curated daily brief for frontier models, AI4S, atomis
 
 ![AI4S Daily Newsletter web UI](docs/images/web-home.png)
 
-The web experience is built as a readable daily publication, with bilingual topic cards, high-signal framing, and a matching email surface.
+The preview uses the English view for consistency with this README. The web UI itself supports both English and Chinese with the same topic structure and email workflow.
 
 ## What It Covers
 

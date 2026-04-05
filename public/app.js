@@ -207,7 +207,19 @@ const SOURCE_SHORT_LABELS = {
   "Psi-k Announcements": "Psi-k"
 };
 
-let currentLocale = window.localStorage.getItem("digest-locale") === "en" ? "en" : "zh";
+function resolveInitialLocale() {
+  const params = new URLSearchParams(window.location.search);
+  const requestedLocale = params.get("locale");
+
+  if (requestedLocale === "en" || requestedLocale === "zh") {
+    window.localStorage.setItem("digest-locale", requestedLocale);
+    return requestedLocale;
+  }
+
+  return window.localStorage.getItem("digest-locale") === "en" ? "en" : "zh";
+}
+
+let currentLocale = resolveInitialLocale();
 let currentPayload = null;
 
 function getCopy() {
