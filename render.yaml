@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: ai4s-daily-newsletter
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: TZ
+        value: Asia/Shanghai
+      - key: DIGEST_ANALYSIS_MODE
+        value: template
