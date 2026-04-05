@@ -66,7 +66,7 @@ Examples include:
 
 ### Requirements
 
-- Node.js 20+
+- Node.js `22.x`
 
 ### Install
 
@@ -95,18 +95,6 @@ The production server exposes:
 - `/api/digest/email` for the generated email payload
 - `/healthz` for health checks
 
-### Generate the email payload
-
-```bash
-npm run digest:email
-```
-
-This prints JSON with:
-
-- `subject`
-- `plainText`
-- `html`
-
 ### Generate a local analysis brief
 
 ```bash
@@ -133,6 +121,18 @@ You can also provide a custom input file:
 ```bash
 node scripts/apply-analysis-bundle.mjs --input path/to/analysis.json
 ```
+
+### Generate the email payload
+
+```bash
+npm run digest:email
+```
+
+This prints JSON with:
+
+- `subject`
+- `plainText`
+- `html`
 
 ### Send a real email locally
 
@@ -219,6 +219,29 @@ Each topic entry should include:
 - `actionsZh`
 
 `hybrid` mode is the recommended default: if the local analysis file is missing, stale, or invalid, the digest still renders using template analysis instead of failing.
+
+## Deploy on Vercel
+
+This repository now supports Vercel deployment without changing the user-facing routes:
+
+- `public/` serves the web UI
+- `api/digest/index.js` serves `/api/digest`
+- `api/digest/email.js` serves `/api/digest/email`
+- `api/healthz.js` serves `/healthz` through [vercel.json](vercel.json)
+
+Recommended Vercel setup:
+
+1. Import the GitHub repository into Vercel
+2. Keep the root directory as the repository root
+3. Let Vercel detect the project as `Other`
+4. Deploy with the existing [vercel.json](vercel.json) and [package.json](package.json)
+
+Recommended environment variables for the hosted site:
+
+- `TZ=Asia/Shanghai`
+- keep `DIGEST_ANALYSIS_MODE=template` unless you intentionally want remote analysis on the public site
+
+The hosted Vercel site is best used for the public web experience. Scheduled email delivery should remain in GitHub Actions.
 
 ## Deploy on Render
 
@@ -326,17 +349,25 @@ public/
   app.js              Client-side rendering and locale switching
   styles.css          Visual design
 
+api/
+  digest/index.js     Vercel digest endpoint
+  digest/email.js     Vercel email endpoint
+  healthz.js          Vercel health endpoint
+
 scripts/
   export-analysis-brief.mjs  Build the compact topic briefing
   apply-analysis-bundle.mjs  Validate and store local analysis JSON
   generate-email.mjs         Build subject / text / html payload
   send-email.mjs             Send the email over Gmail SMTP
+  capture-readme-preview.mjs Refresh the README screenshot
 
 src/
   config/topics.js    Topics, source metadata, editorial hints
   lib/digest.js       Fetching, filtering, ranking, rendering
 
 server.js             Express server and API routes
+vercel.json           Vercel deployment settings
+render.yaml           Render blueprint settings
 ```
 
 ## API

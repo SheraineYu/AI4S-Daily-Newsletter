@@ -17,6 +17,7 @@ app.get("/healthz", (_req, res) => {
   res.json({
     ok: true,
     service: "ai4s-daily-newsletter",
+    runtime: "express",
     uptimeSeconds: Math.round(process.uptime())
   });
 });
@@ -51,6 +52,10 @@ app.get("/api/digest/email", async (req, res) => {
   }
 });
 
-app.listen(port, host, () => {
-  console.log(`AI4S Daily Newsletter is running at http://${displayHost}:${port}`);
-});
+if (process.env.VERCEL !== "1") {
+  app.listen(port, host, () => {
+    console.log(`AI4S Daily Newsletter is running at http://${displayHost}:${port}`);
+  });
+}
+
+export default app;
